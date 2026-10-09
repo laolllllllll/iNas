@@ -8,12 +8,25 @@ const express = require('express');
 const multer = require('multer');
 const QRCode = require('qrcode');
 const { exec, spawn } = require('child_process');
+const http = require('http');
+const https = require('https');
 
 // ============ 配置 ============
 const INSTALL_DIR = path.join('C:', 'iNas root');
 const DATA_DIR = path.join(INSTALL_DIR, 'System', 'data');
 const RECYCLE_BIN = path.join(INSTALL_DIR, '回收站');
+const TRASH_META = path.join(RECYCLE_BIN, '.trash.json');
 const TOKEN_FILE = path.join(DATA_DIR, 'token.json');
+
+// 受保护目录定义
+const PROTECTED_DIRS = {
+  '音乐': 'music',
+  '视频': 'video',
+  '图片': 'image',
+  '下载': 'download',
+  '回收站': 'recycle',
+  'System': 'system'
+};
 
 // 确保目录存在
 [INSTALL_DIR, DATA_DIR, RECYCLE_BIN,
@@ -22,6 +35,11 @@ const TOKEN_FILE = path.join(DATA_DIR, 'token.json');
  path.join(INSTALL_DIR, '图片'),
  path.join(INSTALL_DIR, '下载')
 ].forEach(d => { try { fs.mkdirSync(d, { recursive: true }); } catch(e){} });
+
+// 确保 .trash.json 存在
+if (!fs.existsSync(TRASH_META)) {
+  try { fs.writeFileSync(TRASH_META, JSON.stringify({ items: [] }, null, 2)); } catch(e){}
+}
 
 // ============ Token 管理 ============
 let authToken = '';
@@ -42,12 +60,11 @@ loadToken();
 // ============ 队列管理 ============
 const taskQueue = new Map();
 let taskIdCounter = 0;
-
-function createTask(type, name, total = 0) {
+function createTask(type, name, total = 0, extra = {}) {
   const id = String(++taskIdCounter);
   taskQueue.set(id, {
     id, type, name,
-    status: 'pending', // pending, running, paused, completed, failed, cancelled
+    status: 'pending',
     progress: 0,
     total,
     transferred: 0,
@@ -55,15 +72,21 @@ function createTask(type, name, total = 0) {
     error: null,
     createdAt: Date.now(),
     _cancel: false,
-    _pause: false
+    _pause: false,
+    ...extra
   });
   return id;
 }
-
 function updateTask(id, updates) {
   const t = taskQueue.get(id);
   if (t) Object.assign(t, updates);
 }
+
+// ============ HTTP 静态服务管理 ============
+const httpServers = new Map();
+
+// ============ 临时下载链接管理 ============
+const tempDownloads = new Map(); // token -> { filePath, expiresAt, oneTime }
 
 // ============ 获取本机 IP ============
 function getLocalIP() {
@@ -93,6 +116,36 @@ function findAvailablePort(startPort = 18080) {
   });
 }
 
+// ============ 回收站元数据操作 ============
+function readTrashMeta() {
+  try {
+    return JSON.parse(fs.readFileSync(TRASH_META, 'utf8'));
+  } catch(e) {
+    return { items: [] };
+  }
+}
+function writeTrashMeta(meta) {
+  try { fs.writeFileSync(TRASH_META, JSON.stringify(meta, null, 2)); } catch(e){}
+}
+function addTrashItem(trashedName, originalPath) {
+  const meta = readTrashMeta();
+  meta.items.push({
+    filename: trashedName,
+    originalPath,
+    deletedAt: Date.now()
+  });
+  writeTrashMeta(meta);
+}
+function findTrashItem(trashedName) {
+  const meta = readTrashMeta();
+  return meta.items.find(i => i.filename === trashedName);
+}
+function removeTrashItem(trashedName) {
+  const meta = readTrashMeta();
+  meta.items = meta.items.filter(i => i.filename !== trashedName);
+  writeTrashMeta(meta);
+}
+
 // ============ Express 服务 ============
 let server = null;
 let serverPort = 0;
@@ -120,38 +173,86 @@ async function startServer() {
     next();
   }
 
-  // 路径安全：将相对路径解析到安装目录
+  // 路径安全解析（支持多盘符）
   function resolveSafePath(relativePath) {
     if (!relativePath) return INSTALL_DIR;
-    // 支持 Windows root 和 iNas root 两种模式
+    // Windows 根目录模式：windows-root 或 windows-root/C/ 或 windows-root/D/sub
     if (relativePath === 'windows-root' || relativePath === '/') {
       return 'C:\\';
     }
     if (relativePath.startsWith('windows-root/')) {
       const sub = relativePath.substring('windows-root/'.length);
-      return path.join('C:\\', sub);
+      if (!sub) return 'C:\\';
+      // sub 格式: C 或 C/Users 或 D/folder
+      const parts = sub.split('/');
+      const drive = parts[0].toUpperCase(); // C, D, E...
+      if (!/^[A-Z]$/.test(drive)) return null;
+      const rest = parts.slice(1).join('\\');
+      return rest ? path.join(`${drive}:\\`, rest) : `${drive}:\\`;
     }
     // 默认 iNas root
     const clean = relativePath.replace(/^\/+/, '');
     const resolved = path.join(INSTALL_DIR, clean);
-    // 安全检查
     if (!resolved.startsWith(INSTALL_DIR) && resolved !== INSTALL_DIR) {
       return null;
     }
     return resolved;
   }
 
-  // ============ API: 状态/连接信息 ============
+  // 构建文件项（含受保护标记）
+  function buildFileItem(name, fullPath, relPath, st) {
+    const isDir = st.isDirectory();
+    const item = {
+      name,
+      path: relPath ? `${relPath}/${name}` : name,
+      size: isDir ? 0 : Math.trunc(st.size),
+      modified: Math.trunc(st.mtimeMs),
+      isDirectory: isDir,
+      protected: false,
+      specialType: null
+    };
+    // 检查是否为受保护目录（仅 iNas Root 下）
+    if (isDir && PROTECTED_DIRS[name]) {
+      const specialType = PROTECTED_DIRS[name];
+      // System 目录标记为 system，调用方会过滤
+      item.protected = true;
+      item.specialType = specialType;
+    }
+    return item;
+  }
+
+  // ============ API: 状态 ============
   app_express.get('/api/status', (req, res) => {
     res.json({
       ok: true,
-      version: '1.0.0',
+      version: '1.1.0',
       hostname: os.hostname(),
       platform: os.platform(),
-      totalMem: os.totalmem(),
-      freeMem: os.freemem(),
+      totalMem: Math.trunc(os.totalmem()),
+      freeMem: Math.trunc(os.freemem()),
       uptime: os.uptime()
     });
+  });
+
+  // ============ API: 可用盘符列表 ============
+  app_express.get('/api/drives', auth, (req, res) => {
+    const drives = [];
+    for (let i = 67; i <= 90; i++) { // C to Z
+      const letter = String.fromCharCode(i);
+      const drivePath = `${letter}:\\`;
+      try {
+        if (fs.existsSync(drivePath)) {
+          const stat = fs.statSync(drivePath);
+          drives.push({
+            name: `${letter}:`,
+            letter,
+            type: 'fixed',
+            ready: stat.isDirectory()
+          });
+        }
+      } catch(e) {}
+    }
+    res.json({ drives });
   });
 
   // ============ API: 文件列表 ============
@@ -159,7 +260,6 @@ async function startServer() {
     const relPath = req.query.path || '';
     const target = resolveSafePath(relPath);
     if (!target) return res.status(400).json({ error: 'Invalid path' });
-
     try {
       if (!fs.existsSync(target)) {
         return res.status(404).json({ error: 'Path not found', path: target });
@@ -179,26 +279,27 @@ async function startServer() {
       const files = [];
       const dirs = [];
       for (const name of entries) {
+        // 跳过隐藏元数据文件
+        if (name === '.trash.json') continue;
         const fullPath = path.join(target, name);
         try {
           const st = fs.statSync(fullPath);
-          const item = {
-            name,
-            path: relPath ? `${relPath}/${name}` : name,
-            size: st.isDirectory() ? 0 : Math.trunc(st.size),
-            modified: Math.trunc(st.mtimeMs),
-            isDirectory: st.isDirectory()
-          };
+          const item = buildFileItem(name, fullPath, relPath, st);
+          // 过滤 system 类型目录（不返回给前端）
+          if (item.specialType === 'system') continue;
           if (st.isDirectory()) dirs.push(item);
           else files.push(item);
         } catch(e) {}
       }
-      dirs.sort((a,b) => a.name.localeCompare(b.name));
-      files.sort((a,b) => a.name.localeCompare(b.name));
+      dirs.sort((a,b) => a.name.localeCompare(b.name, 'zh-CN'));
+      files.sort((a,b) => a.name.localeCompare(b.name, 'zh-CN'));
+      // 判断当前目录是否为回收站
+      const isRecycle = target === RECYCLE_BIN;
       res.json({
         type: 'directory',
         path: relPath,
-        name: path.basename(target) || (relPath === 'windows-root' ? 'Windows (C:)' : 'iNas Root'),
+        name: path.basename(target) || (relPath.startsWith('windows-root') ? `Windows (${relPath.split('/')[1] || 'C'}:)` : 'iNas Root'),
+        isRecycle,
         entries: [...dirs, ...files]
       });
     } catch(e) {
@@ -223,6 +324,27 @@ async function startServer() {
     fs.createReadStream(target).pipe(res);
   });
 
+  // ============ API: 临时下载（带 token，无需 x-nas-token） ============
+  app_express.get('/api/temp-download/:token', (req, res) => {
+    const { token } = req.params;
+    const dl = tempDownloads.get(token);
+    if (!dl) return res.status(404).json({ error: 'Link expired or invalid' });
+    if (dl.expiresAt < Date.now()) {
+      tempDownloads.delete(token);
+      return res.status(410).json({ error: 'Link expired' });
+    }
+    const target = resolveSafePath(dl.filePath);
+    if (!target || !fs.existsSync(target)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    if (dl.oneTime) tempDownloads.delete(token);
+    const stat = fs.statSync(target);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(path.basename(target))}"`);
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    fs.createReadStream(target).pipe(res);
+  });
+
   // ============ API: 上传文件 ============
   const upload = multer({
     storage: multer.diskStorage({
@@ -239,9 +361,8 @@ async function startServer() {
         cb(null, file.originalname);
       }
     }),
-    limits: { fileSize: 1024 * 1024 * 1024 * 10 } // 10GB
+    limits: { fileSize: 1024 * 1024 * 1024 * 10 }
   });
-
   app_express.post('/api/upload', auth, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     res.json({
@@ -252,6 +373,65 @@ async function startServer() {
     });
   });
 
+  // ============ API: 从 URL 上传 ============
+  app_express.post('/api/upload-url', auth, (req, res) => {
+    const { url, path: targetPath } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL required' });
+    const target = resolveSafePath(targetPath || '');
+    if (!target || !fs.existsSync(target)) {
+      return res.status(400).json({ error: 'Invalid target path' });
+    }
+    const fileName = url.split('/').pop().split('?')[0] || `download_${Date.now()}`;
+    const destPath = path.join(target, fileName);
+    const taskId = createTask('upload-url', `URL下载: ${fileName}`, 0, { sourceUrl: url });
+    updateTask(taskId, { status: 'running' });
+
+    (async () => {
+      try {
+        const client = url.startsWith('https') ? https : http;
+        await new Promise((resolve, reject) => {
+          const fileStream = fs.createWriteStream(destPath);
+          client.get(url, (response) => {
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+              // 跟随重定向
+              const redirectUrl = response.headers.location;
+              const rClient = redirectUrl.startsWith('https') ? https : http;
+              rClient.get(redirectUrl, (r2) => {
+                const total = parseInt(r2.headers['content-length'] || '0', 10);
+                updateTask(taskId, { total });
+                let transferred = 0;
+                r2.on('data', (chunk) => {
+                  transferred += chunk.length;
+                  updateTask(taskId, { transferred, progress: total > 0 ? Math.min(100, (transferred/total)*100) : 0 });
+                });
+                r2.pipe(fileStream);
+                fileStream.on('finish', resolve);
+                r2.on('error', reject);
+              }).on('error', reject);
+              return;
+            }
+            const total = parseInt(response.headers['content-length'] || '0', 10);
+            updateTask(taskId, { total });
+            let transferred = 0;
+            response.on('data', (chunk) => {
+              transferred += chunk.length;
+              updateTask(taskId, { transferred, progress: total > 0 ? Math.min(100, (transferred/total)*100) : 0 });
+            });
+            response.pipe(fileStream);
+            fileStream.on('finish', resolve);
+            response.on('error', reject);
+          }).on('error', reject);
+        });
+        updateTask(taskId, { status: 'completed', progress: 100 });
+      } catch(e) {
+        updateTask(taskId, { status: 'failed', error: e.message });
+        try { fs.unlinkSync(destPath); } catch(e2){}
+      }
+    })();
+
+    res.json({ ok: true, taskId, filename: fileName });
+  });
+
   // ============ API: 删除文件（移入回收站） ============
   app_express.post('/api/delete', auth, (req, res) => {
     const relPath = req.body.path || '';
@@ -259,16 +439,23 @@ async function startServer() {
     if (!target || !fs.existsSync(target)) {
       return res.status(404).json({ error: 'File not found' });
     }
+    // 不允许删除受保护目录
+    const baseName = path.basename(target);
+    if (PROTECTED_DIRS[baseName]) {
+      return res.status(403).json({ error: 'Protected directory cannot be deleted' });
+    }
     try {
       const fileName = path.basename(target);
-      const dest = path.join(RECYCLE_BIN, `${Date.now()}_${fileName}`);
+      const trashedName = `${Date.now()}_${fileName}`;
+      const dest = path.join(RECYCLE_BIN, trashedName);
       fs.renameSync(target, dest);
+      addTrashItem(trashedName, target);
       res.json({ ok: true, movedTo: dest });
     } catch(e) {
-      // 如果跨盘移动失败，尝试复制+删除
       try {
         const fileName = path.basename(target);
-        const dest = path.join(RECYCLE_BIN, `${Date.now()}_${fileName}`);
+        const trashedName = `${Date.now()}_${fileName}`;
+        const dest = path.join(RECYCLE_BIN, trashedName);
         if (fs.statSync(target).isDirectory()) {
           fs.cpSync(target, dest, { recursive: true });
           fs.rmSync(target, { recursive: true, force: true });
@@ -276,10 +463,69 @@ async function startServer() {
           fs.copyFileSync(target, dest);
           fs.unlinkSync(target);
         }
+        addTrashItem(trashedName, target);
         res.json({ ok: true, movedTo: dest });
       } catch(e2) {
         res.status(500).json({ error: e2.message });
       }
+    }
+  });
+
+  // ============ API: 回收站 - 恢复文件 ============
+  app_express.post('/api/recycle/restore', auth, (req, res) => {
+    const { path: relPath } = req.body;
+    if (!relPath) return res.status(400).json({ error: 'Path required' });
+    // relPath 格式如: 回收站/1234567890_filename
+    const trashedName = path.basename(relPath);
+    const trashItem = findTrashItem(trashedName);
+    if (!trashItem) {
+      return res.status(404).json({ error: 'Trash item metadata not found' });
+    }
+    const src = path.join(RECYCLE_BIN, trashedName);
+    if (!fs.existsSync(src)) {
+      removeTrashItem(trashedName);
+      return res.status(404).json({ error: 'File not found in recycle bin' });
+    }
+    try {
+      const dest = trashItem.originalPath;
+      // 确保目标目录存在
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      // 如果目标已存在，加后缀
+      let finalDest = dest;
+      let counter = 1;
+      while (fs.existsSync(finalDest)) {
+        const ext = path.extname(dest);
+        const base = path.basename(dest, ext);
+        finalDest = path.join(path.dirname(dest), `${base}_恢复${counter}${ext}`);
+        counter++;
+      }
+      fs.renameSync(src, finalDest);
+      removeTrashItem(trashedName);
+      res.json({ ok: true, restoredTo: finalDest });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ API: 回收站 - 清空 ============
+  app_express.post('/api/recycle/empty', auth, (req, res) => {
+    try {
+      const entries = fs.readdirSync(RECYCLE_BIN);
+      for (const name of entries) {
+        if (name === '.trash.json') continue;
+        const fullPath = path.join(RECYCLE_BIN, name);
+        try {
+          if (fs.statSync(fullPath).isDirectory()) {
+            fs.rmSync(fullPath, { recursive: true, force: true });
+          } else {
+            fs.unlinkSync(fullPath);
+          }
+        } catch(e){}
+      }
+      writeTrashMeta({ items: [] });
+      res.json({ ok: true, cleared: entries.length - 1 });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
     }
   });
 
@@ -289,6 +535,10 @@ async function startServer() {
     const target = resolveSafePath(relPath);
     if (!target || !fs.existsSync(target)) {
       return res.status(404).json({ error: 'File not found' });
+    }
+    const baseName = path.basename(target);
+    if (PROTECTED_DIRS[baseName]) {
+      return res.status(403).json({ error: 'Protected directory cannot be renamed' });
     }
     try {
       const newPath = path.join(path.dirname(target), newName);
@@ -306,33 +556,22 @@ async function startServer() {
     const dst = resolveSafePath(destination);
     if (!src || !dst) return res.status(400).json({ error: 'Invalid path' });
     if (!fs.existsSync(src)) return res.status(404).json({ error: 'Source not found' });
-
     const taskId = createTask('copy', `${path.basename(src)} → ${destination}`, 0);
     updateTask(taskId, { status: 'running' });
-
-    // 异步执行复制
     (async () => {
       try {
         const srcStat = fs.statSync(src);
         let totalSize = srcStat.size;
-        if (srcStat.isDirectory()) {
-          // 计算目录总大小
-          totalSize = await calcDirSize(src);
-        }
+        if (srcStat.isDirectory()) totalSize = await calcDirSize(src);
         updateTask(taskId, { total: totalSize });
-
         const destPath = path.join(dst, path.basename(src));
-        if (srcStat.isDirectory()) {
-          await copyDirWithProgress(src, destPath, taskId);
-        } else {
-          await copyFileWithProgress(src, destPath, taskId);
-        }
+        if (srcStat.isDirectory()) await copyDirWithProgress(src, destPath, taskId);
+        else await copyFileWithProgress(src, destPath, taskId);
         updateTask(taskId, { status: 'completed', progress: 100 });
       } catch(e) {
         updateTask(taskId, { status: 'failed', error: e.message });
       }
     })();
-
     res.json({ ok: true, taskId });
   });
 
@@ -346,7 +585,6 @@ async function startServer() {
     }
     return total;
   }
-
   async function copyFileWithProgress(src, dst, taskId) {
     const task = taskQueue.get(taskId);
     return new Promise((resolve, reject) => {
@@ -364,7 +602,6 @@ async function startServer() {
       readStream.pipe(writeStream);
     });
   }
-
   async function copyDirWithProgress(src, dst, taskId) {
     fs.mkdirSync(dst, { recursive: true });
     const entries = fs.readdirSync(src, { withFileTypes: true });
@@ -373,11 +610,8 @@ async function startServer() {
       if (task._cancel) throw new Error('Cancelled');
       const srcFull = path.join(src, entry.name);
       const dstFull = path.join(dst, entry.name);
-      if (entry.isDirectory()) {
-        await copyDirWithProgress(srcFull, dstFull, taskId);
-      } else {
-        await copyFileWithProgress(srcFull, dstFull, taskId);
-      }
+      if (entry.isDirectory()) await copyDirWithProgress(srcFull, dstFull, taskId);
+      else await copyFileWithProgress(srcFull, dstFull, taskId);
     }
   }
 
@@ -393,7 +627,6 @@ async function startServer() {
       fs.renameSync(src, destPath);
       res.json({ ok: true });
     } catch(e) {
-      // 跨盘移动
       try {
         const destPath = path.join(dst, path.basename(src));
         if (fs.statSync(src).isDirectory()) {
@@ -424,22 +657,16 @@ async function startServer() {
     }
   });
 
-  // ============ API: 读取文本文件 ============
+  // ============ API: 读取/写入文本 ============
   app_express.get('/api/read-text', auth, (req, res) => {
     const relPath = req.query.path || '';
     const target = resolveSafePath(relPath);
-    if (!target || !fs.existsSync(target)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
+    if (!target || !fs.existsSync(target)) return res.status(404).json({ error: 'File not found' });
     try {
       const content = fs.readFileSync(target, 'utf8');
       res.json({ ok: true, content, path: relPath });
-    } catch(e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
   });
-
-  // ============ API: 写入文本文件 ============
   app_express.post('/api/write-text', auth, (req, res) => {
     const { path: relPath, content } = req.body;
     const target = resolveSafePath(relPath);
@@ -448,113 +675,169 @@ async function startServer() {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, content, 'utf8');
       res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ============ API: 启用 HTTP 静态文件服务 ============
+  app_express.post('/api/http-server/start', auth, async (req, res) => {
+    const { path: relPath } = req.body;
+    if (!relPath) return res.status(400).json({ error: 'Path required' });
+    const target = resolveSafePath(relPath);
+    if (!target || !fs.existsSync(target)) {
+      return res.status(404).json({ error: 'Directory not found' });
+    }
+    try {
+      const port = await findAvailablePort(18000 + Math.floor(Math.random() * 1000));
+      const staticApp = express();
+      staticApp.use(express.static(target, { dotfiles: 'allow' }));
+      const httpServer = staticApp.listen(port, '0.0.0.0', () => {
+        console.log(`HTTP static server on port ${port} for ${target}`);
+      });
+      const ip = getLocalIP();
+      const url = `http://${ip}:${port}/`;
+      const taskId = createTask('http-server', `HTTP服务: ${path.basename(target)}`, 0, {
+        url, port, servePath: target
+      });
+      updateTask(taskId, { status: 'running', progress: 100 });
+      httpServers.set(taskId, httpServer);
+      res.json({ ok: true, taskId, url, port });
     } catch(e) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  // ============ API: 队列状态 ============
-  app_express.get('/api/queue', auth, (req, res) => {
-    const tasks = Array.from(taskQueue.values()).sort((a,b) => b.createdAt - a.createdAt);
-    res.json({ tasks });
+  // ============ API: 停止 HTTP 服务 ============
+  app_express.post('/api/http-server/stop', auth, (req, res) => {
+    const { taskId } = req.body;
+    if (!taskId) return res.status(400).json({ error: 'taskId required' });
+    const httpServer = httpServers.get(taskId);
+    if (httpServer) {
+      try { httpServer.close(); } catch(e){}
+      httpServers.delete(taskId);
+    }
+    updateTask(taskId, { status: 'cancelled' });
+    res.json({ ok: true });
   });
 
-  // ============ API: 队列操作 ============
+  // ============ API: 生成下载链接 ============
+  app_express.post('/api/download-link', auth, (req, res) => {
+    const { path: relPath } = req.body;
+    if (!relPath) return res.status(400).json({ error: 'Path required' });
+    const target = resolveSafePath(relPath);
+    if (!target || !fs.existsSync(target)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    if (fs.statSync(target).isDirectory()) {
+      return res.status(400).json({ error: 'Cannot create link for directory' });
+    }
+    const token = crypto.randomBytes(16).toString('hex');
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24小时
+    tempDownloads.set(token, { filePath: relPath, expiresAt, oneTime: false });
+    const ip = getLocalIP();
+    const url = `http://${ip}:${serverPort}/api/temp-download/${token}`;
+    const taskId = createTask('download-link', `下载链接: ${path.basename(target)}`, 0, {
+      url, token, expiresAt
+    });
+    updateTask(taskId, { status: 'running', progress: 100 });
+    res.json({ ok: true, taskId, url, expiresAt });
+  });
+
+  // ============ API: 使下载链接失效 ============
+  app_express.post('/api/download-link/revoke', auth, (req, res) => {
+    const { taskId } = req.body;
+    const task = taskQueue.get(taskId);
+    if (task && task.token) {
+      tempDownloads.delete(task.token);
+    }
+    updateTask(taskId, { status: 'cancelled' });
+    res.json({ ok: true });
+  });
+
+  // ============ API: 队列状态/操作 ============
+  app_express.get('/api/queue', auth, (req, res) => {
+    const tasks = Array.from(taskQueue.values())
+      .map(t => {
+        const { _cancel, _pause, ...publicTask } = t;
+        return publicTask;
+      })
+      .sort((a,b) => b.createdAt - a.createdAt);
+    res.json({ tasks });
+  });
   app_express.post('/api/queue/:id/:action', auth, (req, res) => {
     const { id, action } = req.params;
     const task = taskQueue.get(id);
     if (!task) return res.status(404).json({ error: 'Task not found' });
-
     switch(action) {
       case 'pause':
-        task._pause = true;
-        task.status = 'paused';
-        break;
+        task._pause = true; task.status = 'paused'; break;
       case 'resume':
-        task._pause = false;
-        task.status = 'running';
-        break;
+        task._pause = false; task.status = 'running'; break;
       case 'cancel':
-        task._cancel = true;
-        task.status = 'cancelled';
+        task._cancel = true; task.status = 'cancelled';
+        // 如果是 HTTP 服务，同时关闭
+        if (task.type === 'http-server') {
+          const srv = httpServers.get(id);
+          if (srv) { try { srv.close(); } catch(e){} httpServers.delete(id); }
+        }
+        // 如果是下载链接，同时失效
+        if (task.type === 'download-link' && task.token) {
+          tempDownloads.delete(task.token);
+        }
         break;
       case 'remove':
-        taskQueue.delete(id);
-        break;
+        taskQueue.delete(id); break;
       default:
         return res.status(400).json({ error: 'Unknown action' });
     }
     res.json({ ok: true, task: { id: task.id, status: task.status } });
   });
 
-  // ============ API: CMD 远程执行 ============
+  // ============ API: CMD 远程执行（UTF-8） ============
   const cmdSessions = new Map();
   let cmdSessionId = 0;
 
-  // 执行命令并返回完整输出（简单模式）
   app_express.post('/api/cmd', auth, (req, res) => {
     const { command, sessionId } = req.body;
     if (!command) return res.status(400).json({ error: 'No command specified' });
-
     const sid = sessionId || String(++cmdSessionId);
-
-    // 使用 cmd.exe 执行
-    const child = spawn('cmd.exe', ['/c', command], {
+    // 先 chcp 65001 切换 UTF-8，再执行命令
+    const fullCommand = `chcp 65001 >nul && ${command}`;
+    const child = spawn('cmd.exe', ['/c', fullCommand], {
       cwd: INSTALL_DIR,
       windowsHide: true,
       env: { ...process.env, PROMPT: '$P$G' }
     });
-
     let stdout = '';
     let stderr = '';
-
-    child.stdout.on('data', (data) => { stdout += data.toString(); });
-    child.stderr.on('data', (data) => { stderr += data.toString(); });
-
+    child.stdout.on('data', (data) => { stdout += data.toString('utf8'); });
+    child.stderr.on('data', (data) => { stderr += data.toString('utf8'); });
     child.on('close', (code) => {
-      res.json({
-        ok: true,
-        sessionId: sid,
-        command,
-        stdout,
-        stderr,
-        exitCode: code,
-        cwd: INSTALL_DIR
-      });
+      res.json({ ok: true, sessionId: sid, command, stdout, stderr, exitCode: code, cwd: INSTALL_DIR });
     });
-
     child.on('error', (err) => {
       res.status(500).json({ error: err.message, sessionId: sid });
     });
-
-    // 超时保护 60 秒
-    setTimeout(() => {
-      try { child.kill(); } catch(e) {}
-    }, 60000);
+    setTimeout(() => { try { child.kill(); } catch(e) {} }, 60000);
   });
 
-  // CMD 交互式会话（WebSocket 风格的轮询）
+  // CMD 交互式会话
   app_express.post('/api/cmd/session', auth, (req, res) => {
     const { cwd } = req.body;
     const sid = String(++cmdSessionId);
     const workDir = cwd ? resolveSafePath(cwd) : INSTALL_DIR;
-
     const child = spawn('cmd.exe', [], {
       cwd: workDir || INSTALL_DIR,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe']
     });
-
     let outputBuffer = '';
-    child.stdout.on('data', (d) => { outputBuffer += d.toString(); });
-    child.stderr.on('data', (d) => { outputBuffer += d.toString(); });
-
+    child.stdout.on('data', (d) => { outputBuffer += d.toString('utf8'); });
+    child.stderr.on('data', (d) => { outputBuffer += d.toString('utf8'); });
     cmdSessions.set(sid, { child, outputBuffer, cwd: workDir || INSTALL_DIR, lastAccess: Date.now() });
-
+    // 会话启动时切换 UTF-8 代码页
+    try { child.stdin.write('chcp 65001 >nul\r\n'); } catch(e){}
     res.json({ ok: true, sessionId: sid, cwd: workDir || INSTALL_DIR });
   });
-
-  // 向会话发送命令
   app_express.post('/api/cmd/session/:id/write', auth, (req, res) => {
     const { id } = req.params;
     const { input } = req.body;
@@ -564,12 +847,8 @@ async function startServer() {
       session.child.stdin.write(input + '\r\n');
       session.lastAccess = Date.now();
       res.json({ ok: true });
-    } catch(e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch(e) { res.status(500).json({ error: e.message }); }
   });
-
-  // 读取会话输出
   app_express.get('/api/cmd/session/:id/read', auth, (req, res) => {
     const { id } = req.params;
     const session = cmdSessions.get(id);
@@ -579,28 +858,29 @@ async function startServer() {
     session.lastAccess = Date.now();
     res.json({ ok: true, output, alive: !session.child.killed });
   });
-
-  // 关闭会话
   app_express.post('/api/cmd/session/:id/close', auth, (req, res) => {
     const { id } = req.params;
     const session = cmdSessions.get(id);
-    if (session) {
-      try { session.child.kill(); } catch(e) {}
-      cmdSessions.delete(id);
-    }
+    if (session) { try { session.child.kill(); } catch(e){} cmdSessions.delete(id); }
     res.json({ ok: true });
   });
-
-  // 清理超时会话（10分钟无访问）
   setInterval(() => {
     const now = Date.now();
     for (const [id, session] of cmdSessions) {
       if (now - session.lastAccess > 600000) {
-        try { session.child.kill(); } catch(e) {}
+        try { session.child.kill(); } catch(e){}
         cmdSessions.delete(id);
       }
     }
   }, 60000);
+
+  // 清理过期临时下载链接
+  setInterval(() => {
+    const now = Date.now();
+    for (const [token, dl] of tempDownloads) {
+      if (dl.expiresAt < now) tempDownloads.delete(token);
+    }
+  }, 300000);
 
   // ============ 启动服务 ============
   serverPort = await findAvailablePort(18080);
@@ -608,53 +888,30 @@ async function startServer() {
     console.log(`iNas server running on http://0.0.0.0:${serverPort}`);
     console.log(`Token: ${authToken}`);
   });
-
   return { port: serverPort, token: authToken };
 }
 
 // ============ Electron 窗口 ============
 let mainWindow = null;
 let serverInfo = null;
-
 async function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 900,
-    height: 650,
-    title: 'iNas',
-    resizable: true,
+    width: 900, height: 650, title: 'iNas', resizable: true,
     backgroundColor: '#1a1a2e',
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
   });
-
-  // 启动服务器
-  try {
-    serverInfo = await startServer();
-  } catch(e) {
-    console.error('Failed to start server:', e);
-  }
-
+  try { serverInfo = await startServer(); } catch(e) { console.error('Failed to start server:', e); }
   mainWindow.loadFile('index.html');
-
-  // 窗口加载完成后推送服务器信息
   mainWindow.webContents.on('did-finish-load', () => {
     if (serverInfo) {
       const ip = getLocalIP();
       const connectUrl = `http://${ip}:${serverInfo.port}`;
       const qrData = JSON.stringify({ ip, port: serverInfo.port, token: serverInfo.token, hostname: os.hostname() });
-
       QRCode.toDataURL(qrData, { width: 280, margin: 2, color: { dark: '#1a1a2e', light: '#ffffff' } })
         .then(qrImg => {
           mainWindow.webContents.send('server-info', {
-            ip,
-            port: serverInfo.port,
-            token: serverInfo.token,
-            connectUrl,
-            qrImg,
-            hostname: os.hostname(),
-            installDir: INSTALL_DIR
+            ip, port: serverInfo.port, token: serverInfo.token,
+            connectUrl, qrImg, hostname: os.hostname(), installDir: INSTALL_DIR
           });
         })
         .catch(err => {
@@ -666,32 +923,19 @@ async function createWindow() {
     }
   });
 }
-
-// IPC: 获取服务器信息（轮询备用）
 ipcMain.handle('get-server-info', () => {
   if (!serverInfo) return null;
-  return {
-    ip: getLocalIP(),
-    port: serverInfo.port,
-    token: serverInfo.token,
-    hostname: os.hostname()
-  };
+  return { ip: getLocalIP(), port: serverInfo.port, token: serverInfo.token, hostname: os.hostname() };
 });
-
-// IPC: 重置 token
 ipcMain.handle('reset-token', () => {
   authToken = crypto.randomBytes(16).toString('hex');
-  try { fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: authToken, created: Date.now() })); } catch(e) {}
+  try { fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token: authToken, created: Date.now() })); } catch(e){}
   return authToken;
 });
-
 app.whenReady().then(() => {
   createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-
 app.on('window-all-closed', () => {
   if (server) { try { server.close(); } catch(e){} }
   if (process.platform !== 'darwin') app.quit();

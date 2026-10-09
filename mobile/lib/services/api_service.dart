@@ -240,6 +240,74 @@ class ApiService {
     return response.data;
   }
 
+  // ============ 可用盘符列表 ============
+  Future<List<dynamic>> getDrives() async {
+    final response = await _dio.get('$_baseUrl/api/drives', options: Options(headers: _headers));
+    return response.data['drives'] ?? [];
+  }
+
+  // ============ 从 URL 上传 ============
+  Future<Map<String, dynamic>> uploadFromUrl(String url, String targetPath) async {
+    final response = await _dio.post('$_baseUrl/api/upload-url',
+      data: {'url': url, 'path': targetPath},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 回收站 - 恢复文件 ============
+  Future<Map<String, dynamic>> restoreFromRecycle(String path) async {
+    final response = await _dio.post('$_baseUrl/api/recycle/restore',
+      data: {'path': path},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 回收站 - 清空 ============
+  Future<Map<String, dynamic>> emptyRecycle() async {
+    final response = await _dio.post('$_baseUrl/api/recycle/empty',
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 启用 HTTP 静态服务 ============
+  Future<Map<String, dynamic>> startHttpServer(String path) async {
+    final response = await _dio.post('$_baseUrl/api/http-server/start',
+      data: {'path': path},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 停止 HTTP 服务 ============
+  Future<Map<String, dynamic>> stopHttpServer(String taskId) async {
+    final response = await _dio.post('$_baseUrl/api/http-server/stop',
+      data: {'taskId': taskId},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 生成下载链接 ============
+  Future<Map<String, dynamic>> createDownloadLink(String path) async {
+    final response = await _dio.post('$_baseUrl/api/download-link',
+      data: {'path': path},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 使下载链接失效 ============
+  Future<Map<String, dynamic>> revokeDownloadLink(String taskId) async {
+    final response = await _dio.post('$_baseUrl/api/download-link/revoke',
+      data: {'taskId': taskId},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
   // ============ 测试连接 ============
   Future<bool> testConnection() async {
     try {

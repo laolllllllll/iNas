@@ -4,6 +4,8 @@ class FileItem {
   final int size;
   final int modified;
   final bool isDirectory;
+  final bool protected;
+  final String? specialType; // music, video, image, download, recycle
 
   FileItem({
     required this.name,
@@ -11,16 +13,19 @@ class FileItem {
     required this.size,
     required this.modified,
     required this.isDirectory,
+    this.protected = false,
+    this.specialType,
   });
 
   factory FileItem.fromJson(Map<String, dynamic> json) {
     return FileItem(
       name: json['name']?.toString() ?? '',
       path: json['path']?.toString() ?? '',
-      // 安全转换：Windows Express 返回的数字可能是 double（如 12345.0）
       size: (json['size'] as num?)?.toInt() ?? 0,
       modified: (json['modified'] as num?)?.toInt() ?? 0,
       isDirectory: json['isDirectory'] == true,
+      protected: json['protected'] == true,
+      specialType: json['specialType']?.toString(),
     );
   }
 

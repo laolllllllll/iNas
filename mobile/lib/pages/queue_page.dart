@@ -239,6 +239,7 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
 
   Widget _buildRemoteTaskCard(dynamic task) {
     final status = task['status']?.toString() ?? 'unknown';
+    final taskType = task['type']?.toString() ?? '';
     final progress = (task['progress'] as num?)?.toDouble() ?? 0.0;
     final isActive = status == 'running' || status == 'pending';
     return Container(
@@ -284,26 +285,45 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (status == 'running')
+                    // 传输类任务（copy/upload/upload-url/download）：暂停/继续 + 取消
+                    if (isActive && (taskType == 'copy' || taskType == 'upload' || taskType == 'upload-url' || taskType == 'download')) ...[
+                      if (status == 'running')
+                        IconButton(
+                          icon: const Icon(Icons.pause, color: Color(0xFFFFB74D), size: 20),
+                          onPressed: () { ApiService().queueAction(task['id'], 'pause'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      if (status == 'paused')
+                        IconButton(
+                          icon: const Icon(Icons.play_arrow, color: Color(0xFF81C784), size: 20),
+                          onPressed: () { ApiService().queueAction(task['id'], 'resume'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       IconButton(
-                        icon: const Icon(Icons.pause, color: Color(0xFFFFB74D), size: 20),
-                        onPressed: () => ApiService().queueAction(task['id'], 'pause'),
+                        icon: const Icon(Icons.cancel, color: Color(0xFFEF5350), size: 20),
+                        onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
-                    if (status == 'paused')
+                    ],
+                    // 服务类任务（http-server/download-link）：终止
+                    if (isActive && (taskType == 'http-server' || taskType == 'download-link'))
                       IconButton(
-                        icon: const Icon(Icons.play_arrow, color: Color(0xFF81C784), size: 20),
-                        onPressed: () => ApiService().queueAction(task['id'], 'resume'),
+                        icon: const Icon(Icons.stop_circle, color: Color(0xFFEF5350), size: 20),
+                        onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
-                    IconButton(
-                      icon: const Icon(Icons.cancel, color: Color(0xFFEF5350), size: 20),
-                      onPressed: () => ApiService().queueAction(task['id'], 'cancel'),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
+                    // 已结束任务：清除
+                    if (!isActive)
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Color(0xFF6B7280), size: 20),
+                        onPressed: () { ApiService().queueAction(task['id'], 'remove'); Future.delayed(const Duration(milliseconds: 300), _loadRemoteQueue); },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
                   ],
                 ),
             ],
