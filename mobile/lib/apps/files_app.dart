@@ -92,9 +92,9 @@ class _FilesAppState extends State<FilesApp> {
         ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFEF5350)), title: const Text('删除', style: TextStyle(color: Color(0xFFEF5350))),
           onTap: () async { Navigator.pop(ctx); await ApiService().deleteFile(file.path); _loadFiles(); }),
         ListTile(leading: const Icon(Icons.drive_file_rename_outline, color: Color(0xFF4FC3F7)), title: const Text('重命名', style: TextStyle(color: Colors.white)),
-          onPressed: () => Navigator.pop(ctx)),
+          onTap: () => Navigator.pop(ctx)),
         ListTile(leading: const Icon(Icons.link, color: Color(0xFF4FC3F7)), title: const Text('开启直链', style: TextStyle(color: Colors.white)),
-          onPressed: () async { Navigator.pop(ctx); await ApiService().createDownloadLink(file.path); }),
+          onTap: () async { Navigator.pop(ctx); await ApiService().createDownloadLink(file.path); }),
       ])));
   }
 
