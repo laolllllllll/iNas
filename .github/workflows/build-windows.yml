@@ -30,8 +30,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: windows/package-lock.json
 
       - name: 设置 Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v5
