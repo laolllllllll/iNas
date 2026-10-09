@@ -1,0 +1,198 @@
+name: Build iNas iOS IPA
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/build-ios.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 1.0.2)'
+        required: true
+        default: '1.0.2'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+  XCODE_VERSION: '15.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Xcode ${{ env.XCODE_VERSION }}
+        run: |
+          sudo xcode-select -switch /Applications/Xcode_${{ env.XCODE_VERSION }}.app
+          xcodebuild -version
+
+      - name: 设置 Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 验证 Flutter
+        run: flutter --version
+
+      - name: 生成/修复 iOS 工程
+        run: |
+          # 备份自定义文件
+          if [ -f "ios/Runner/Info.plist" ]; then
+            cp ios/Runner/Info.plist /tmp/Info.plist.custom
+            echo "已备份自定义 Info.plist"
+          fi
+          if [ -f "ios/Podfile" ]; then
+            cp ios/Podfile /tmp/Podfile.custom
+            echo "已备份自定义 Podfile"
+          fi
+          
+          # 如果没有完整的 Xcode 工程，删除 ios 目录重新生成
+          if [ ! -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
+            echo "Xcode 工程不完整，删除 ios 目录并重新生成..."
+            rm -rf ios
+            flutter create --org com.cor --project-name inas --platforms ios .
+          else
+            echo "iOS Xcode 工程已存在"
+          fi
+          
+          # 恢复自定义 Info.plist
+          if [ -f "/tmp/Info.plist.custom" ]; then
+            cp /tmp/Info.plist.custom ios/Runner/Info.plist
+            echo "已恢复自定义 Info.plist"
+          fi
+          
+          # 恢复自定义 Podfile（含无签名构建配置）
+          if [ -f "/tmp/Podfile.custom" ]; then
+            cp /tmp/Podfile.custom ios/Podfile
+            echo "已恢复自定义 Podfile"
+          fi
+          
+          echo "iOS 工程结构:"
+          ls -la ios/
+          ls -la ios/Runner/ | head -20
+
+      - name: 安装依赖
+        run: |
+          flutter pub get
+          cd ios
+          pod install --repo-update || pod install
+          cd ..
+
+      - name: 确定版本号
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="1.0.2"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "构建版本: $VERSION"
+
+      - name: 构建 iOS (无签名 Release)
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          echo "开始构建 iOS IPA，版本: $VERSION"
+          
+          # 清理旧构建
+          flutter clean
+          flutter pub get
+          
+          # 构建无签名 IPA
+          # --no-codesign 跳过代码签名
+          # 输出到 build/ios/iphoneos/Runner.app
+          flutter build ios \
+            --release \
+            --no-codesign \
+            --build-name="$VERSION" \
+            --build-number=3 \
+            -v
+          
+          echo "构建完成，检查产物:"
+          ls -la build/ios/iphoneos/ || echo "iphoneos 目录不存在"
+          ls -la build/ios/ || echo "ios 构建目录列表"
+
+      - name: 打包为 IPA
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          
+          if [ ! -d "$APP_PATH" ]; then
+            echo "错误: Runner.app 未找到，搜索构建产物..."
+            find build -name "*.app" -type d 2>/dev/null || true
+            find build -name "Runner.app" 2>/dev/null || true
+            exit 1
+          fi
+          
+          echo "找到 Runner.app，开始打包 IPA..."
+          
+          # 创建 IPA 目录结构
+          IPA_DIR="build/ipa/Payload"
+          rm -rf build/ipa
+          mkdir -p "$IPA_DIR"
+          
+          # 复制 .app 到 Payload
+          cp -r "$APP_PATH" "$IPA_DIR/"
+          
+          # 移除签名相关文件（确保无签名）
+          find "$IPA_DIR" -name "embedded.mobileprovision" -delete 2>/dev/null || true
+          find "$IPA_DIR" -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
+          
+          # 创建 iTunesMetadata（可选，TrollStore 兼容）
+          cat > build/ipa/iTunesMetadata.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>bundleVersion</key>
+              <string>3</string>
+              <key>itemName</key>
+              <string>iNas</string>
+              <key>kind</key>
+              <string>software</string>
+              <key>softwareVersionBundleId</key>
+              <string>com.cor.inas</string>
+              <key>vendorId</key>
+              <string>com.cor.inas</string>
+          </dict>
+          </plist>
+          EOF
+          
+          # 打包为 IPA（zip 格式）
+          IPA_NAME="iNas-${VERSION}.ipa"
+          cd build/ipa
+          zip -r "../$IPA_NAME" Payload iTunesMetadata.plist
+          cd ../..
+          
+          echo "IPA 打包完成:"
+          ls -lh "build/$IPA_NAME"
+          echo "IPA_PATH=build/$IPA_NAME" >> $GITHUB_ENV
+          echo "IPA_NAME=$IPA_NAME" >> $GITHUB_ENV
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: iNas-iOS-${{ steps.version.outputs.VERSION }}
+          path: mobile/build/iNas-${{ steps.version.outputs.VERSION }}.ipa
+          retention-days: 90
+
+      - name: 创建 Release (tag 触发时)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mobile/build/iNas-${{ steps.version.outputs.VERSION }}.ipa
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

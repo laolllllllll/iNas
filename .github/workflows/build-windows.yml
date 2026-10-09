@@ -1,15 +1,16 @@
 name: Build iNas Windows Installer
-
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/build-windows.yml'
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号 (如 1.0.0)'
+        description: '版本号 (如 1.0.2)'
         required: true
-        default: '1.0.0'
+        default: '1.0.2'
 
 env:
   NODE_VERSION: '16.x'
@@ -45,8 +46,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           else
-            TAG="${GITHUB_REF#refs/tags/v}"
-            echo "VERSION=$TAG" >> $GITHUB_OUTPUT
+            echo "VERSION=1.0.2" >> $GITHUB_OUTPUT
           fi
           echo "Building version: ${{ steps.version.outputs.VERSION }}"
 
@@ -72,33 +72,24 @@ jobs:
           PACKAGE_DIR="dist/package"
           rm -rf "$PACKAGE_DIR"
           mkdir -p "$PACKAGE_DIR/System"
-
-          # 复制 Electron 输出到 System 目录
           cp -r dist/win-unpacked/* "$PACKAGE_DIR/System/"
-
-          # 确保主程序名为 iNas.exe
           if [ -f "$PACKAGE_DIR/System/iNas.exe" ]; then
             echo "Main exe: iNas.exe"
           elif [ -f "$PACKAGE_DIR/System/electron.exe" ]; then
             mv "$PACKAGE_DIR/System/electron.exe" "$PACKAGE_DIR/System/iNas.exe"
             echo "Renamed electron.exe -> iNas.exe"
           else
-            echo "Warning: Main exe not found, listing directory:"
+            echo "Warning: Main exe not found"
             ls -la "$PACKAGE_DIR/System/" | head -20
           fi
-
-          # 创建默认文件夹占位
           mkdir -p "$PACKAGE_DIR/回收站" "$PACKAGE_DIR/音乐" "$PACKAGE_DIR/视频" "$PACKAGE_DIR/图片" "$PACKAGE_DIR/下载"
-
-          echo "Package structure:"
-          find "$PACKAGE_DIR" -maxdepth 2 -type d
+          echo "Package structure ready"
 
       - name: 打包为 ZIP
         run: |
           cd windows/dist/package
           ZIP_PATH="../iNas-package.zip"
           rm -f "$ZIP_PATH"
-          # 使用 PowerShell 的 Compress-Archive 确保兼容性
           powershell -Command "Compress-Archive -Path * -DestinationPath ../iNas-package.zip -Force"
           ls -lh ../iNas-package.zip
 
@@ -113,28 +104,23 @@ jobs:
           cd windows/dist
           VERSION="${{ steps.version.outputs.VERSION }}"
           FINAL_EXE="iNas-Setup-${VERSION}.exe"
-
-          # 拼接 stub + zip
           cat stub.exe iNas-package.zip > "$FINAL_EXE"
-
           echo "Final installer:"
           ls -lh "$FINAL_EXE"
-          echo "FINAL_EXE=$FINAL_EXE" >> $GITHUB_ENV
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
           name: iNas-Setup-${{ steps.version.outputs.VERSION }}
           path: windows/dist/iNas-Setup-${{ steps.version.outputs.VERSION }}.exe
-          retention-days: 30
+          retention-days: 90
 
-      - name: 创建 Release (仅 tag 触发)
+      - name: 创建 Release (tag 触发时)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: windows/dist/iNas-Setup-${{ steps.version.outputs.VERSION }}.exe
           generate_release_notes: true
           draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

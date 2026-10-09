@@ -1,150 +1,96 @@
-# iNas GitHub Action 打包配置
+# iNas - 跨平台文件管理器 + 远程 CMD 终端
 
-## 目录结构
+iNas 是一套跨平台文件管理系统，包含 Windows 服务端和 iOS 移动端，支持同 WiFi 下的文件管理、远程 CMD 执行、文件传输等功能。
 
+## 功能特性
+
+### Windows 服务端
+- HTTP 文件服务（Express），随机端口 + Token 认证
+- 二维码绑定（含 IP + 端口 + Token）
+- 完整文件管理 API：浏览、上传、下载、删除（回收站）、重命名、复制、移动、新建目录
+- 文本文件读写 API
+- **CMD 远程执行 API**（单次执行 + 交互式会话）
+- 任务队列（复制/移动带进度）
+- 自解压安装器，安装到 `C:\iNas root\`，自动创建桌面快捷方式
+
+### iOS 移动端（四 Tab 结构）
+1. **浏览**：双根目录切换（iNas Root / Windows C:），文件列表，长按菜单（下载/重命名/删除/复制/粘贴），图片/视频/HTML 预览，文本编辑器
+2. **管理设备**：内嵌 Windows CMD 远程终端，同 WiFi 连接执行命令，实时输出显示，快捷命令面板
+3. **队列**：上传/下载/跨设备复制任务，进度条，暂停/继续/取消
+4. **此终端**：本地下载文件管理，iOS 原生分享面板（share_plus），用其他应用打开
+
+## 技术栈
+- **Windows**: Electron 22.3.27 + Express + multer + qrcode
+- **移动端**: Flutter 3.24 + Dart（dio / share_plus / chewie / webview_flutter / mobile_scanner）
+- **认证**: 所有 API 请求携带 Header `x-nas-token`
+- **包名**: com.cor.iNas
+
+## 仓库结构
 ```
-inas-build/
-├── .github/
-│   └── workflows/
-│       └── build-windows.yml    # GitHub Action 工作流
-└── windows/
-    ├── package.json              # Electron 项目配置（示例，替换为你的实际配置）
-    ├── main.js                   # Electron 主进程（你的代码）
-    ├── build/
-    │   └── build-installer.sh    # 本地构建脚本（可选）
-    └── stub/
-        └── main.go               # 自解压安装器 Go stub
-```
-
-## 使用方法
-
-### 1. 将文件放入你的 GitHub 仓库
-
-把以下文件复制到你的 iNas 项目仓库根目录：
-
-- `.github/workflows/build-windows.yml` → 仓库根目录的 `.github/workflows/`
-- `windows/stub/main.go` → 仓库的 `windows/stub/` 目录
-- `windows/package.json` → **用你自己的 package.json 覆盖**（这只是示例）
-
-### 2. 确保项目结构
-
-你的仓库应该有类似这样的结构：
-
-```
-your-repo/
-├── .github/
-│   └── workflows/
-│       └── build-windows.yml
+iNas/
+├── .github/workflows/
+│   ├── build-windows.yml    # Windows EXE 安装器构建
+│   └── build-ios.yml        # iOS IPA 构建（无签名，可侧载）
 ├── windows/
+│   ├── main.js               # Electron 主进程 + Express 服务
+│   ├── index.html            # 服务端 UI（状态 + 二维码）
 │   ├── package.json
-│   ├── package-lock.json
-│   ├── main.js
-│   ├── stub/
-│   │   ├── go.mod
-│   │   └── main.go
-│   └── ... (其他 Electron 源码)
-└── mobile/                     # Flutter 移动端（暂时不用打包）
+│   ├── build/build-installer.sh
+│   └── stub/main.go          # 自解压安装器 Go stub
+└── mobile/
+    ├── pubspec.yaml
+    ├── ios/                  # iOS 工程配置
+    └── lib/
+        ├── main.dart         # 四 Tab 主框架
+        ├── models/
+        ├── services/         # API 服务 + 下载管理
+        ├── pages/            # 浏览/CMD/队列/终端/预览/编辑器
+        └── widgets/
 ```
 
-### 3. 初始化 Go stub 模块
+## API 列表
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/status | 服务状态 |
+| GET | /api/files?path= | 文件列表 |
+| GET | /api/download?path= | 下载文件 |
+| POST | /api/upload | 上传文件 (multipart) |
+| POST | /api/delete | 删除文件（移入回收站） |
+| POST | /api/rename | 重命名 |
+| POST | /api/copy | 复制（异步任务） |
+| POST | /api/move | 移动 |
+| POST | /api/mkdir | 新建目录 |
+| GET | /api/read-text?path= | 读取文本文件 |
+| POST | /api/write-text | 写入文本文件 |
+| GET | /api/queue | 任务队列状态 |
+| POST | /api/queue/:id/:action | 队列操作（pause/resume/cancel/remove） |
+| POST | /api/cmd | CMD 单次执行 |
+| POST | /api/cmd/session | 创建 CMD 交互式会话 |
+| POST | /api/cmd/session/:id/write | 向会话写入命令 |
+| GET | /api/cmd/session/:id/read | 读取会话输出 |
+| POST | /api/cmd/session/:id/close | 关闭会话 |
 
-在 `windows/stub/` 目录下执行：
+## 构建
 
-```bash
-cd windows/stub
-go mod init inas-stub
-go mod tidy
-```
+### Windows EXE 安装器
+推送代码到 main 分支后自动触发 GitHub Action，产物为 `iNas-Setup-1.0.2.exe`。
 
-### 4. 触发构建
+安装器行为：
+- 自解压到 `C:\iNas root\`
+- Electron 程序位于 `C:\iNas root\System\iNas.exe`
+- 自动创建默认文件夹：回收站、音乐、视频、图片、下载
+- 创建桌面快捷方式和开始菜单快捷方式
 
-**方式一：推送 Tag（推荐，自动创建 Release）**
+### iOS IPA（可侧载）
+推送代码到 main 分支后自动触发 GitHub Action（macOS runner），产物为 `iNas-1.0.2.ipa`。
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+- 无代码签名构建，可通过 TrollStore / AltStore 侧载
+- 支持 iOS 12.0+
+- 构建命令核心：`flutter build ios --release --no-codesign`
 
-推送 tag 后，GitHub Action 会自动：
-1. 构建 Electron
-2. 编译 Go stub
-3. 拼接成自解压安装器 EXE
-4. 上传到 Actions 产物
-5. **自动创建 GitHub Release 并附加 EXE**
-
-**方式二：手动触发**
-
-在 GitHub 仓库页面：
-1. 点击 **Actions** 标签
-2. 选择 **Build iNas Windows Installer**
-3. 点击 **Run workflow**
-4. 输入版本号（如 `1.0.0`）
-5. 点击 **Run workflow**
-
-### 5. 下载产物
-
-构建完成后：
-- **Actions 产物**：在 Actions 页面的构建记录底部，下载 `iNas-Setup-x.x.x`
-- **Release**（tag 触发）：在仓库的 Releases 页面下载
-
-## 安装器行为
-
-生成的 `iNas-Setup-x.x.x.exe` 是自解压安装器，运行后会：
-
-1. 将所有文件解压到 `C:\iNas root\`
-2. Electron 程序放在 `C:\iNas root\System\iNas.exe`
-3. 自动创建默认文件夹：回收站、音乐、视频、图片、下载
-4. 创建桌面快捷方式 `iNas.lnk`
-5. 创建开始菜单快捷方式
-
-## 技术细节
-
-### 自解压原理
-
-```
-┌─────────────────┐
-│   Go Stub EXE   │  ← 安装器引导程序（负责解压+创建快捷方式）
-├─────────────────┤
-│   ZIP 数据      │  ← Electron 打包后的所有文件
-└─────────────────┘
-```
-
-Stub 程序运行时：
-1. 读取自身 EXE 文件
-2. 查找 ZIP 文件头签名 `PK\x03\x04`
-3. 从该位置开始解压所有文件到安装目录
-4. 创建快捷方式
-
-### Electron 版本
-
-使用 **Electron 22.3.27**，兼容 Windows 7 x64。
-
-### Node.js 版本
-
-GitHub Action 使用 **Node.js 16.x**，与 Electron 22 匹配。
-
-## 常见问题
-
-### Q: 构建失败，提示找不到 main.js？
-A: 确保 `windows/package.json` 中的 `main` 字段指向正确的入口文件，并且 `build.files` 包含了所有需要的文件。
-
-### Q: 安装后桌面没有快捷方式？
-A: Stub 使用 VBScript 创建快捷方式，确保目标系统有 `cscript`（Windows 默认都有）。可以检查 `%TEMP%\create_shortcut.vbs` 是否执行成功。
-
-### Q: 想修改安装目录？
-A: 编辑 `windows/stub/main.go` 中的 `installDir` 变量，默认是 `C:\iNas root`。
-
-### Q: 想同时打包 APK？
-A: 暂时不需要。后续可以添加另一个 job 使用 `ubuntu-latest` + Flutter 环境构建 APK。
-
-## 本地测试构建
-
-如果你想在本地测试构建流程：
-
-```bash
-# 需要 Go 和 Node.js 环境
-cd windows
-bash build/build-installer.sh 1.0.0
-```
-
-产物会在 `windows/dist/iNas-Setup-1.0.0.exe`。
+## 使用说明
+1. 在 Windows 上运行 iNas-Setup.exe 安装并启动 iNas
+2. 确保手机和电脑连接同一 WiFi
+3. 在 iOS 端安装 iNas.ipa 并打开
+4. 在浏览页点击"连接设备"，扫描 Windows 端二维码或手动输入 IP/端口/Token
+5. 连接成功后即可浏览文件、远程执行 CMD、管理传输队列

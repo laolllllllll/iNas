@@ -1,0 +1,255 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/file_item.dart';
+
+class ApiService {
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
+
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 30),
+    sendTimeout: const Duration(seconds: 30),
+  ));
+
+  String? _baseUrl;
+  String? _token;
+  bool _connected = false;
+
+  bool get isConnected => _connected && _baseUrl != null && _token != null;
+  String? get baseUrl => _baseUrl;
+  String? get token => _token;
+
+  Future<void> loadConnection() async {
+    final prefs = await SharedPreferences.getInstance();
+    _baseUrl = prefs.getString('inas_base_url');
+    _token = prefs.getString('inas_token');
+    if (_baseUrl != null && _token != null) {
+      _connected = true;
+    }
+  }
+
+  Future<void> saveConnection(String ip, int port, String token) async {
+    _baseUrl = 'http://$ip:$port';
+    _token = token;
+    _connected = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('inas_base_url', _baseUrl!);
+    await prefs.setString('inas_token', token);
+    await prefs.setString('inas_ip', ip);
+    await prefs.setInt('inas_port', port);
+  }
+
+  Future<void> clearConnection() async {
+    _baseUrl = null;
+    _token = null;
+    _connected = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('inas_base_url');
+    await prefs.remove('inas_token');
+    await prefs.remove('inas_ip');
+    await prefs.remove('inas_port');
+  }
+
+  Map<String, String> get _headers => {
+    if (_token != null) 'x-nas-token': _token!,
+    'Content-Type': 'application/json',
+  };
+
+  // ============ 文件列表 ============
+  Future<Map<String, dynamic>> listFiles(String path) async {
+    final response = await _dio.get(
+      '$_baseUrl/api/files',
+      queryParameters: {'path': path},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 下载文件 ============
+  Future<void> downloadFile(String path, String savePath, {
+    void Function(int received, int total)? onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    await _dio.download(
+      '$_baseUrl/api/download',
+      savePath,
+      queryParameters: {'path': path},
+      options: Options(
+        headers: _headers,
+        responseType: ResponseType.bytes,
+      ),
+      onReceiveProgress: onProgress,
+      cancelToken: cancelToken,
+    );
+  }
+
+  // ============ 上传文件 ============
+  Future<Response> uploadFile(String filePath, String targetPath, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final formData = FormData.fromMap({
+      'path': targetPath,
+      'file': await MultipartFile.fromFile(filePath),
+    });
+    return await _dio.post(
+      '$_baseUrl/api/upload',
+      data: formData,
+      options: Options(headers: {
+        if (_token != null) 'x-nas-token': _token!,
+      }),
+      onSendProgress: onProgress,
+    );
+  }
+
+  // ============ 删除文件 ============
+  Future<Map<String, dynamic>> deleteFile(String path) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/delete',
+      data: {'path': path},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 重命名 ============
+  Future<Map<String, dynamic>> renameFile(String path, String newName) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/rename',
+      data: {'path': path, 'newName': newName},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 复制 ============
+  Future<Map<String, dynamic>> copyFile(String source, String destination) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/copy',
+      data: {'source': source, 'destination': destination},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 移动 ============
+  Future<Map<String, dynamic>> moveFile(String source, String destination) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/move',
+      data: {'source': source, 'destination': destination},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 创建目录 ============
+  Future<Map<String, dynamic>> createDir(String path, String name) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/mkdir',
+      data: {'path': path, 'name': name},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 读取文本 ============
+  Future<Map<String, dynamic>> readText(String path) async {
+    final response = await _dio.get(
+      '$_baseUrl/api/read-text',
+      queryParameters: {'path': path},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 写入文本 ============
+  Future<Map<String, dynamic>> writeText(String path, String content) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/write-text',
+      data: {'path': path, 'content': content},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 队列状态 ============
+  Future<List<dynamic>> getQueue() async {
+    final response = await _dio.get(
+      '$_baseUrl/api/queue',
+      options: Options(headers: _headers),
+    );
+    return response.data['tasks'] ?? [];
+  }
+
+  // ============ 队列操作 ============
+  Future<Map<String, dynamic>> queueAction(String id, String action) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/queue/$id/$action',
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ CMD 执行（简单模式） ============
+  Future<Map<String, dynamic>> executeCmd(String command, {String? sessionId}) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/cmd',
+      data: {'command': command, if (sessionId != null) 'sessionId': sessionId},
+      options: Options(
+        headers: _headers,
+        receiveTimeout: const Duration(seconds: 65),
+      ),
+    );
+    return response.data;
+  }
+
+  // ============ CMD 会话 ============
+  Future<Map<String, dynamic>> createCmdSession({String? cwd}) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/cmd/session',
+      data: {if (cwd != null) 'cwd': cwd},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> writeCmdSession(String id, String input) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/cmd/session/$id/write',
+      data: {'input': input},
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> readCmdSession(String id) async {
+    final response = await _dio.get(
+      '$_baseUrl/api/cmd/session/$id/read',
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> closeCmdSession(String id) async {
+    final response = await _dio.post(
+      '$_baseUrl/api/cmd/session/$id/close',
+      options: Options(headers: _headers),
+    );
+    return response.data;
+  }
+
+  // ============ 测试连接 ============
+  Future<bool> testConnection() async {
+    try {
+      final response = await _dio.get(
+        '$_baseUrl/api/status',
+        options: Options(headers: _headers, receiveTimeout: const Duration(seconds: 5)),
+      );
+      return response.data['ok'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+}

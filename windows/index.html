@@ -2,26 +2,330 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>iNas</title>
+  <title>iNas - 文件管理服务</title>
   <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .header {
+      padding: 20px 30px;
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 22px;
+      font-weight: 600;
+      background: linear-gradient(90deg, #4fc3f7, #81c784);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(76,175,80,0.15);
+      border: 1px solid rgba(76,175,80,0.3);
+      border-radius: 20px;
+      font-size: 13px;
+      color: #81c784;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      background: #4caf50;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .main {
+      flex: 1;
+      display: flex;
+      padding: 25px;
+      gap: 25px;
+      overflow: hidden;
+    }
+    .left-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .right-panel {
+      width: 320px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      background: #1e1e2e;
-      color: #cdd6f4;
+      gap: 15px;
     }
-    h1 { font-size: 48px; margin-bottom: 10px; }
-    p { color: #a6adc8; }
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .card-title {
+      font-size: 13px;
+      color: #90a4ae;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 14px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: #90a4ae; }
+    .info-value {
+      color: #e0e0e0;
+      font-family: 'Consolas', monospace;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .copy-btn {
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: #90a4ae;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .qr-container {
+      background: #fff;
+      padding: 12px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qr-container img { width: 260px; height: 260px; }
+    .qr-hint {
+      text-align: center;
+      font-size: 13px;
+      color: #90a4ae;
+      line-height: 1.5;
+    }
+    .qr-hint strong { color: #4fc3f7; }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #4fc3f7, #29b6f6);
+      color: #1a1a2e;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,195,247,0.3); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: #e0e0e0;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.12); }
+    .footer {
+      padding: 12px 30px;
+      background: rgba(0,0,0,0.15);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 12px;
+      color: #607d8b;
+      display: flex;
+      justify-content: space-between;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #4fc3f7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .api-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .api-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      background: rgba(79,195,247,0.1);
+      border: 1px solid rgba(79,195,247,0.2);
+      border-radius: 4px;
+      color: #4fc3f7;
+      font-family: 'Consolas', monospace;
+    }
   </style>
 </head>
 <body>
-  <h1>iNas</h1>
-  <p>Cross-platform file manager</p>
-  <p style="margin-top: 20px; font-size: 12px;">Replace this with your actual iNas UI</p>
+  <div class="header">
+    <h1>⚡ iNas 服务端</h1>
+    <div class="status-badge" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">启动中...</span>
+    </div>
+  </div>
+
+  <div class="main" id="mainContent" style="display:none;">
+    <div class="left-panel">
+      <div class="card">
+        <div class="card-title">📡 连接信息</div>
+        <div class="info-row">
+          <span class="info-label">主机名</span>
+          <span class="info-value" id="hostname">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">IP 地址</span>
+          <span class="info-value" id="ip">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">端口</span>
+          <span class="info-value" id="port">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">访问地址</span>
+          <span class="info-value">
+            <span id="connectUrl">-</span>
+            <button class="copy-btn" onclick="copyText('connectUrl')">复制</button>
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">认证 Token</span>
+          <span class="info-value">
+            <span id="token" style="font-size:12px;">-</span>
+            <button class="copy-btn" onclick="copyText('token')">复制</button>
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">安装目录</span>
+          <span class="info-value" id="installDir" style="font-size:12px;">-</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔧 可用 API</div>
+        <div class="api-list">
+          <span class="api-tag">/api/files</span>
+          <span class="api-tag">/api/upload</span>
+          <span class="api-tag">/api/download</span>
+          <span class="api-tag">/api/delete</span>
+          <span class="api-tag">/api/rename</span>
+          <span class="api-tag">/api/copy</span>
+          <span class="api-tag">/api/move</span>
+          <span class="api-tag">/api/mkdir</span>
+          <span class="api-tag">/api/read-text</span>
+          <span class="api-tag">/api/write-text</span>
+          <span class="api-tag">/api/queue</span>
+          <span class="api-tag">/api/cmd</span>
+          <span class="api-tag">/api/cmd/session</span>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex; gap:12px;">
+        <button class="btn btn-secondary" style="flex:1;" onclick="resetToken()">🔄 重置 Token</button>
+        <button class="btn btn-primary" style="flex:1;" onclick="openInstallDir()">📂 打开安装目录</button>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div class="card-title" style="align-self:flex-start;">📱 扫码连接</div>
+      <div class="qr-container">
+        <img id="qrImg" src="" alt="QR Code" />
+      </div>
+      <div class="qr-hint">
+        使用 <strong>iNas 移动端</strong> 扫描二维码<br/>
+        自动配置 IP、端口和认证 Token<br/>
+        确保手机与电脑连接同一 WiFi
+      </div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <span style="color:#90a4ae;">正在启动 iNas 服务...</span>
+  </div>
+
+  <div class="footer">
+    <span>iNas v1.0.0 | Electron + Express</span>
+    <span>所有 API 请求需携带 Header: x-nas-token</span>
+  </div>
+
+  <script>
+    const { ipcRenderer, shell } = require('electron');
+
+    ipcRenderer.on('server-info', (event, info) => {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'flex';
+      document.getElementById('statusText').textContent = '服务运行中';
+
+      document.getElementById('hostname').textContent = info.hostname || '-';
+      document.getElementById('ip').textContent = info.ip || '-';
+      document.getElementById('port').textContent = info.port || '-';
+      document.getElementById('connectUrl').textContent = info.connectUrl || '-';
+      document.getElementById('token').textContent = info.token || '-';
+      document.getElementById('installDir').textContent = info.installDir || '-';
+
+      if (info.qrImg) {
+        document.getElementById('qrImg').src = info.qrImg;
+      }
+    });
+
+    function copyText(elementId) {
+      const text = document.getElementById(elementId).textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = '已复制';
+        setTimeout(() => btn.textContent = orig, 1500);
+      });
+    }
+
+    async function resetToken() {
+      if (confirm('确定要重置 Token 吗？已连接的设备需要重新绑定。')) {
+        const newToken = await ipcRenderer.invoke('reset-token');
+        document.getElementById('token').textContent = newToken;
+        alert('Token 已重置，请重新扫描二维码绑定设备');
+      }
+    }
+
+    function openInstallDir() {
+      const dir = document.getElementById('installDir').textContent;
+      if (dir && dir !== '-') {
+        shell.openPath(dir);
+      }
+    }
+  </script>
 </body>
 </html>
