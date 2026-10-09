@@ -43,9 +43,6 @@
       "node_modules/**/*",
       "!**/*.{md,markdown}"
     ],
-    "asar": true,
-    "asarUnpack": [
-      "node_modules/**/*"
-    ]
+    "asar": true
   }
 }
