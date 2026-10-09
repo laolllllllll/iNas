@@ -15,11 +15,12 @@ class FileItem {
 
   factory FileItem.fromJson(Map<String, dynamic> json) {
     return FileItem(
-      name: json['name'] ?? '',
-      path: json['path'] ?? '',
-      size: json['size'] ?? 0,
-      modified: json['modified'] ?? 0,
-      isDirectory: json['isDirectory'] ?? false,
+      name: json['name']?.toString() ?? '',
+      path: json['path']?.toString() ?? '',
+      // 安全转换：Windows Express 返回的数字可能是 double（如 12345.0）
+      size: (json['size'] as num?)?.toInt() ?? 0,
+      modified: (json['modified'] as num?)?.toInt() ?? 0,
+      isDirectory: json['isDirectory'] == true,
     );
   }
 

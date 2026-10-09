@@ -170,8 +170,8 @@ async function startServer() {
           type: 'file',
           name: path.basename(target),
           path: relPath,
-          size: stat.size,
-          modified: stat.mtimeMs,
+          size: Math.trunc(stat.size),
+          modified: Math.trunc(stat.mtimeMs),
           isDirectory: false
         });
       }
@@ -185,8 +185,8 @@ async function startServer() {
           const item = {
             name,
             path: relPath ? `${relPath}/${name}` : name,
-            size: st.isDirectory() ? 0 : st.size,
-            modified: st.mtimeMs,
+            size: st.isDirectory() ? 0 : Math.trunc(st.size),
+            modified: Math.trunc(st.mtimeMs),
             isDirectory: st.isDirectory()
           };
           if (st.isDirectory()) dirs.push(item);
@@ -247,7 +247,7 @@ async function startServer() {
     res.json({
       ok: true,
       filename: req.file.filename,
-      size: req.file.size,
+      size: Math.trunc(req.file.size),
       path: req.body.path || ''
     });
   });

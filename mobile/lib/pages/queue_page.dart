@@ -238,8 +238,8 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
   }
 
   Widget _buildRemoteTaskCard(dynamic task) {
-    final status = task['status'] ?? 'unknown';
-    final progress = (task['progress'] ?? 0).toDouble();
+    final status = task['status']?.toString() ?? 'unknown';
+    final progress = (task['progress'] as num?)?.toDouble() ?? 0.0;
     final isActive = status == 'running' || status == 'pending';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
