@@ -56,7 +56,7 @@ class _TrashAppState extends State<TrashApp> {
               final item = _items[i];
               return ListTile(
                 leading: Icon(item.isDirectory ? Icons.folder : Icons.insert_drive_file, color: const Color(0xFFFFA726)),
-                title: Text(item.name, style: const TextStyle(color: Colors.white, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(item.showName, style: const TextStyle(color: Colors.white, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(item.formattedSize, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
                 trailing: TextButton(onPressed: () => _restoreItem(item), child: const Text('恢复', style: TextStyle(color: Color(0xFF66BB6A)))),
               );

@@ -195,19 +195,21 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(padding: const EdgeInsets.all(16), child: Row(children: [
-          Icon(_getFileIcon(file), color: _getSpecialColor(file), size: 32),
+          Icon(_getFileIcon(file), color: _getFileColor(file), size: 32),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(file.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(file.showName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
             Text('${file.formattedSize} ${file.isDirectory ? "文件夹" : ""}${file.protected ? " · 受保护" : ""}', style: const TextStyle(color: Colors.grey, fontSize: 13)),
           ])),
         ])),
         const Divider(color: Color(0xFF2A2A3E)),
-        // 回收站中的文件：显示恢复，不显示删除
+        // 废纸篓中的文件：显示恢复，不显示删除
         if (_isRecycle)
           _buildMenuItem(Icons.restore, '恢复到原位置', () { Navigator.pop(ctx); _restoreFile(file); }, color: const Color(0xFF66BB6A)),
         if (!_isRecycle && !file.isDirectory)
           _buildMenuItem(Icons.download, '下载到本机', () { Navigator.pop(ctx); _downloadFile(file); }),
+        if (!_isRecycle && file.isTorrent)
+          _buildMenuItem(Icons.download_for_offline, 'BT 下载', () { Navigator.pop(ctx); _startBTDownload(file); }, color: const Color(0xFF66BB6A)),
         if (!_isRecycle && !file.isDirectory && (file.isText || file.isImage || file.isVideo || file.isHtml))
           _buildMenuItem(Icons.visibility, '预览/打开', () { Navigator.pop(ctx); _openFile(file); }),
         // 文件夹：启用 HTTP 服务
@@ -222,7 +224,7 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
         if (!_isRecycle && !file.protected)
           _buildMenuItem(Icons.drive_file_rename_outline, '重命名', () { Navigator.pop(ctx); _showRenameDialog(file); }),
         if (!_isRecycle && !file.protected)
-          _buildMenuItem(Icons.delete_outline, '删除（移入回收站）', () { Navigator.pop(ctx); _deleteFile(file); }, color: const Color(0xFFEF5350)),
+          _buildMenuItem(Icons.delete_outline, '删除（移入废纸篓）', () { Navigator.pop(ctx); _deleteFile(file); }, color: const Color(0xFFEF5350)),
         const SizedBox(height: 8),
       ])),
     );
@@ -238,34 +240,19 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
 
   IconData _getFileIcon(FileItem file) {
     if (file.isDirectory) {
-      switch (file.specialType) {
-        case 'music': return Icons.music_note;
-        case 'video': return Icons.play_circle_filled;
-        case 'image': return Icons.photo;
-        case 'download': return Icons.download;
-        case 'recycle': return Icons.delete_sweep;
-        default: return Icons.folder;
-      }
+      return FileIconHelper.getSpecialIcon(file.specialType);
     }
-    if (file.isImage) return Icons.image;
-    if (file.isVideo) return Icons.movie;
-    if (file.isHtml) return Icons.language;
-    if (file.isText) return Icons.description;
-    return Icons.insert_drive_file;
+    return FileIconHelper.getIcon(file.name);
   }
 
-  Color _getSpecialColor(FileItem file) {
-    switch (file.specialType) {
-      case 'music': return const Color(0xFFEF5350);
-      case 'video': return const Color(0xFFAB47BC);
-      case 'image': return const Color(0xFF66BB6A);
-      case 'download': return const Color(0xFF42A5F5);
-      case 'recycle': return const Color(0xFFFFA726);
-      default: return const Color(0xFF4FC3F7);
+  Color _getFileColor(FileItem file) {
+    if (file.isDirectory) {
+      return FileIconHelper.getSpecialColor(file.specialType);
     }
+    return FileIconHelper.getColor(file.name);
   }
 
-  // ============ 回收站恢复 ============
+  // ============ 废纸篓恢复 ============
   Future<void> _restoreFile(FileItem file) async {
     try {
       await ApiService().restoreFromRecycle(file.path);
@@ -274,12 +261,12 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
     } catch (e) { _showToast('恢复失败: $e'); }
   }
 
-  // ============ 清空回收站 ============
+  // ============ 清空废纸篓 ============
   Future<void> _emptyRecycle() async {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       backgroundColor: const Color(0xFF1E1E2E),
-      title: const Text('清空回收站?', style: TextStyle(color: Colors.white)),
-      content: const Text('回收站中的所有文件将被永久删除，无法恢复。', style: TextStyle(color: Colors.grey)),
+      title: const Text('清空废纸篓?', style: TextStyle(color: Colors.white)),
+      content: const Text('废纸篓中的所有文件将被永久删除，无法恢复。', style: TextStyle(color: Colors.grey)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
         ElevatedButton(onPressed: () => Navigator.pop(ctx, true),
@@ -290,7 +277,7 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
     if (confirm == true) {
       try {
         await ApiService().emptyRecycle();
-        _showToast('回收站已清空');
+        _showToast('废纸篓已清空');
         _loadFiles();
       } catch (e) { _showToast('清空失败: $e'); }
     }
@@ -352,6 +339,14 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
     } catch (e) { _showToast('生成失败: $e'); }
   }
 
+  // ============ BT 下载 ============
+  Future<void> _startBTDownload(FileItem file) async {
+    try {
+      final result = await ApiService().btDownload(file.path);
+      _showToast('BT 下载已加入队列: ${result['taskId']}');
+    } catch (e) { _showToast('BT 下载失败: $e'); }
+  }
+
   // ============ 重命名/删除 ============
   Future<void> _showRenameDialog(FileItem file) async {
     _renameController.text = file.name;
@@ -380,7 +375,7 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       backgroundColor: const Color(0xFF1E1E2E),
       title: Text('删除 ${file.name}?', style: const TextStyle(color: Colors.white)),
-      content: const Text('文件将移入回收站，可恢复。', style: TextStyle(color: Colors.grey)),
+      content: const Text('文件将移入废纸篓，可恢复。', style: TextStyle(color: Colors.grey)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
         ElevatedButton(onPressed: () => Navigator.pop(ctx, true),
@@ -411,6 +406,7 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
       builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
         const SizedBox(height: 12),
         _buildMenuItem(Icons.create_new_folder, '新建文件夹', () { Navigator.pop(ctx); _showNewDirDialog(); }),
+        _buildMenuItem(Icons.note_add, '新建文件', () { Navigator.pop(ctx); _showNewFileDialog(); }),
         _buildMenuItem(Icons.upload_file, '从本地上传', () { Navigator.pop(ctx); _uploadFromLocal(); }),
         _buildMenuItem(Icons.link, '从 URL 上传', () { Navigator.pop(ctx); _showUrlUploadDialog(); }),
         const SizedBox(height: 8),
@@ -478,6 +474,33 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
             try {
               final dest = _currentPath.isEmpty ? _rootPrefix : _currentPath;
               await ApiService().createDir(dest, name);
+              _loadFiles();
+            } catch (e) { _showToast('创建失败: $e'); }
+          }
+          Navigator.pop(ctx);
+        }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4FC3F7)),
+          child: const Text('创建', style: TextStyle(color: Color(0xFF1A1A2E)))),
+      ],
+    ));
+  }
+
+  Future<void> _showNewFileDialog() async {
+    final controller = TextEditingController();
+    await showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF1E1E2E),
+      title: const Text('新建文件', style: TextStyle(color: Colors.white)),
+      content: TextField(controller: controller, style: const TextStyle(color: Colors.white),
+        decoration: const InputDecoration(filled: true, fillColor: Color(0xFF12121A), hintText: '如: 新建文本文档.txt', hintStyle: TextStyle(color: Color(0xFF455A64)),
+          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF2A2A3E))),
+          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF4FC3F7)))), autofocus: true),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        ElevatedButton(onPressed: () async {
+          final filename = controller.text.trim();
+          if (filename.isNotEmpty) {
+            try {
+              final dest = _currentPath.isEmpty ? _rootPrefix : _currentPath;
+              await ApiService().createFile(dest, filename);
               _loadFiles();
             } catch (e) { _showToast('创建失败: $e'); }
           }
@@ -573,15 +596,15 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
                 suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward, size: 16, color: Color(0xFF4FC3F7)), onPressed: _submitAddress, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32))),
               onSubmitted: (_) => _submitAddress())),
           ])),
-        // 回收站：清空按钮
+        // 废纸篓：清空按钮
         if (_isRecycle)
           Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(children: [
               const Icon(Icons.delete_sweep, color: Color(0xFFFFA726), size: 18),
               const SizedBox(width: 8),
-              const Text('回收站', style: TextStyle(color: Color(0xFFFFA726), fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text('废纸篓', style: TextStyle(color: Color(0xFFFFA726), fontWeight: FontWeight.bold, fontSize: 14)),
               const Spacer(),
-              TextButton.icon(onPressed: _emptyRecycle, icon: const Icon(Icons.delete_forever, size: 16), label: const Text('清空回收站'),
+              TextButton.icon(onPressed: _emptyRecycle, icon: const Icon(Icons.delete_forever, size: 16), label: const Text('清空废纸篓'),
                 style: TextButton.styleFrom(foregroundColor: const Color(0xFFEF5350))),
             ])),
         Expanded(child: _buildFileList()),
@@ -612,7 +635,7 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
     if (_files.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(_isRecycle ? Icons.delete_sweep : Icons.folder_open, color: const Color(0xFF455A64), size: 64),
       const SizedBox(height: 12),
-      Text(_isRecycle ? '回收站为空' : '此目录为空', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 15)),
+      Text(_isRecycle ? '废纸篓为空' : '此目录为空', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 15)),
     ]));
     return ListView.builder(controller: _listScrollController,
       itemCount: _files.length,
@@ -627,8 +650,8 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
     return Container(
       decoration: BoxDecoration(color: highlight ? const Color(0xFF1E3A5F) : Colors.transparent),
       child: ListTile(
-        leading: Icon(_getFileIcon(file), color: _getSpecialColor(file), size: 28),
-        title: Text(file.name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+        leading: Icon(_getFileIcon(file), color: _getFileColor(file), size: 28),
+        title: Text(file.showName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(file.isDirectory ? '文件夹${file.protected ? " · 受保护" : ""}' : file.formattedSize,
           style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
         trailing: file.protected ? const Icon(Icons.lock, color: Color(0xFFFFA726), size: 16) : null,

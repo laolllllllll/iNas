@@ -89,10 +89,11 @@ class ApiService {
   // ============ 上传文件 ============
   Future<Response> uploadFile(String filePath, String targetPath, {
     void Function(int sent, int total)? onProgress,
+    String? customFilename,
   }) async {
     final formData = FormData.fromMap({
       'path': targetPath,
-      'file': await MultipartFile.fromFile(filePath),
+      'file': await MultipartFile.fromFile(filePath, filename: customFilename),
     });
     return await _dio.post(
       '$_baseUrl/api/upload',
@@ -376,5 +377,32 @@ class ApiService {
     } catch (e) {
       return false;
     }
+  }
+
+  // ============ v2.1: 创建空文件 ============
+  Future<Map<String, dynamic>> createFile(String path, String filename) async {
+    final response = await _dio.post('$_baseUrl/api/create-file', data: {'path': path, 'filename': filename}, options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  // ============ v2.1: BT 下载 ============
+  Future<Map<String, dynamic>> btDownload(String torrentPath, {String? destPath}) async {
+    final response = await _dio.post('$_baseUrl/api/bt/download', data: {'torrentPath': torrentPath, if (destPath != null) 'destPath': destPath}, options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  Future<Map<String, dynamic>> btStatus(String taskId) async {
+    final response = await _dio.get('$_baseUrl/api/bt/status/$taskId', options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  Future<void> btCancel(String taskId) async {
+    await _dio.post('$_baseUrl/api/bt/cancel/$taskId', options: Options(headers: _headers));
+  }
+
+  // ============ v2.1: 清空队列（仅已结束） ============
+  Future<Map<String, dynamic>> clearQueue() async {
+    final response = await _dio.post('$_baseUrl/api/queue/clear', options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
   }
 }

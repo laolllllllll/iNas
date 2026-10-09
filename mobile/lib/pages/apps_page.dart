@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_info.dart';
@@ -31,6 +32,18 @@ class _AppsPageState extends State<AppsPage> {
   void initState() {
     super.initState();
     _loadApps();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 返回桌面时刷新壁纸
+    _refreshWallpaper();
+  }
+
+  Future<void> _refreshWallpaper() async {
+    final wp = await AppService().getWallpaper();
+    if (mounted && wp != _wallpaper) setState(() => _wallpaper = wp);
   }
 
   Future<void> _loadApps() async {
@@ -173,15 +186,23 @@ class _AppsPageState extends State<AppsPage> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)));
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [const Color(0xFF1A1A2E), const Color(0xFF0D0D1A)],
+      body: Stack(children: [
+        // 壁纸背景
+        if (_wallpaper != null && _wallpaper!.isNotEmpty && File(_wallpaper!).existsSync())
+          Positioned.fill(child: Image.file(File(_wallpaper!), fit: BoxFit.cover)),
+        // 暗色遮罩 + 默认渐变
+        Positioned.fill(child: Container(
+          decoration: BoxDecoration(
+            color: _wallpaper != null && _wallpaper!.isNotEmpty ? Colors.black.withOpacity(0.35) : null,
+            gradient: (_wallpaper == null || _wallpaper!.isEmpty) ? LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [const Color(0xFF1A1A2E), const Color(0xFF0D0D1A)],
+            ) : null,
           ),
-        ),
-        child: SafeArea(
+        )),
+        // 内容
+        Positioned.fill(child: SafeArea(
           child: Column(
             children: [
               // 顶部标题
@@ -217,8 +238,8 @@ class _AppsPageState extends State<AppsPage> {
               ),
             ],
           ),
-        ),
-      ),
+        )),
+      ]),
     );
   }
 

@@ -10,6 +10,8 @@ const QRCode = require('qrcode');
 const { exec, spawn } = require('child_process');
 const http = require('http');
 const https = require('https');
+let WebTorrent = null;
+try { WebTorrent = require('webtorrent'); } catch(e) { console.log('webtorrent not available:', e.message); }
 
 // ============ 配置 ============
 const INSTALL_DIR = path.join('C:', 'iNas root');
@@ -151,11 +153,12 @@ function readTrashMeta() {
 function writeTrashMeta(meta) {
   try { fs.writeFileSync(TRASH_META, JSON.stringify(meta, null, 2)); } catch(e){}
 }
-function addTrashItem(trashedName, originalPath) {
+function addTrashItem(trashedName, originalPath, originalName) {
   const meta = readTrashMeta();
   meta.items.push({
     filename: trashedName,
     originalPath,
+    originalName: originalName || path.basename(originalPath),
     deletedAt: Date.now()
   });
   writeTrashMeta(meta);
@@ -241,6 +244,11 @@ async function startServer() {
       // System 目录标记为 system，调用方会过滤
       item.protected = true;
       item.specialType = specialType;
+      // 显示名称映射
+      if (specialType === 'photos') item.displayName = '相册';
+      if (specialType === 'music') item.displayName = '音乐';
+      if (specialType === 'download') item.displayName = '下载';
+      if (specialType === 'recycle') item.displayName = '废纸篓';
     }
     return item;
   }
@@ -311,6 +319,11 @@ async function startServer() {
           const item = buildFileItem(name, fullPath, relPath, st);
           // 过滤 system 类型目录（不返回给前端）
           if (item.specialType === 'system') continue;
+          // 回收站项目：附加 originalName
+          if (target === RECYCLE_BIN) {
+            const ti = findTrashItem(name);
+            if (ti && ti.originalName) item.originalName = ti.originalName;
+          }
           if (st.isDirectory()) dirs.push(item);
           else files.push(item);
         } catch(e) {}
@@ -407,53 +420,10 @@ async function startServer() {
     }
     const fileName = url.split('/').pop().split('?')[0] || `download_${Date.now()}`;
     const destPath = path.join(target, fileName);
-    const taskId = createTask('upload-url', `URL下载: ${fileName}`, 0, { sourceUrl: url });
-    updateTask(taskId, { status: 'running' });
-
-    (async () => {
-      try {
-        const client = url.startsWith('https') ? https : http;
-        await new Promise((resolve, reject) => {
-          const fileStream = fs.createWriteStream(destPath);
-          client.get(url, (response) => {
-            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-              // 跟随重定向
-              const redirectUrl = response.headers.location;
-              const rClient = redirectUrl.startsWith('https') ? https : http;
-              rClient.get(redirectUrl, (r2) => {
-                const total = parseInt(r2.headers['content-length'] || '0', 10);
-                updateTask(taskId, { total });
-                let transferred = 0;
-                r2.on('data', (chunk) => {
-                  transferred += chunk.length;
-                  updateTask(taskId, { transferred, progress: total > 0 ? Math.min(100, (transferred/total)*100) : 0 });
-                });
-                r2.pipe(fileStream);
-                fileStream.on('finish', resolve);
-                r2.on('error', reject);
-              }).on('error', reject);
-              return;
-            }
-            const total = parseInt(response.headers['content-length'] || '0', 10);
-            updateTask(taskId, { total });
-            let transferred = 0;
-            response.on('data', (chunk) => {
-              transferred += chunk.length;
-              updateTask(taskId, { transferred, progress: total > 0 ? Math.min(100, (transferred/total)*100) : 0 });
-            });
-            response.pipe(fileStream);
-            fileStream.on('finish', resolve);
-            response.on('error', reject);
-          }).on('error', reject);
-        });
-        updateTask(taskId, { status: 'completed', progress: 100 });
-      } catch(e) {
-        updateTask(taskId, { status: 'failed', error: e.message });
-        try { fs.unlinkSync(destPath); } catch(e2){}
-      }
-    })();
-
+    const taskId = createTask('url-download', `下载: ${fileName}`, 0, { sourceUrl: url, destPath });
+    updateTask(taskId, { status: 'pending' });
     res.json({ ok: true, taskId, filename: fileName });
+    setTimeout(processDownloadQueue, 100);
   });
 
   // ============ API: 删除文件（移入回收站） ============
@@ -473,7 +443,7 @@ async function startServer() {
       const trashedName = `${Date.now()}_${fileName}`;
       const dest = path.join(RECYCLE_BIN, trashedName);
       fs.renameSync(target, dest);
-      addTrashItem(trashedName, target);
+      addTrashItem(trashedName, target, fileName);
       res.json({ ok: true, movedTo: dest });
     } catch(e) {
       try {
@@ -487,7 +457,7 @@ async function startServer() {
           fs.copyFileSync(target, dest);
           fs.unlinkSync(target);
         }
-        addTrashItem(trashedName, target);
+        addTrashItem(trashedName, target, fileName);
         res.json({ ok: true, movedTo: dest });
       } catch(e2) {
         res.status(500).json({ error: e2.message });
@@ -681,6 +651,24 @@ async function startServer() {
     }
   });
 
+  // ============ API: 创建空文件 ============
+  app_express.post('/api/create-file', auth, (req, res) => {
+    const { path: relPath, filename } = req.body;
+    if (!filename) return res.status(400).json({ error: 'Filename required' });
+    const target = resolveSafePath(relPath || '');
+    if (!target) return res.status(400).json({ error: 'Invalid path' });
+    try {
+      const filePath = path.join(target, filename);
+      if (fs.existsSync(filePath)) {
+        return res.status(409).json({ error: 'File already exists' });
+      }
+      fs.writeFileSync(filePath, '');
+      res.json({ ok: true, path: relPath ? `${relPath}/${filename}` : filename });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ============ API: 读取/写入文本 ============
   app_express.get('/api/read-text', auth, (req, res) => {
     const relPath = req.query.path || '';
@@ -815,6 +803,172 @@ async function startServer() {
     }
     res.json({ ok: true, task: { id: task.id, status: task.status } });
   });
+
+  // ============ API: 清空队列（仅已结束任务） ============
+  app_express.post('/api/queue/clear', auth, (req, res) => {
+    let cleared = 0;
+    for (const [id, task] of taskQueue) {
+      if (['completed', 'failed', 'cancelled'].includes(task.status)) {
+        // 清理关联资源
+        if (task.type === 'http-server') {
+          const srv = httpServers.get(id);
+          if (srv) { try { srv.close(); } catch(e){} httpServers.delete(id); }
+        }
+        if (task.type === 'download-link' && task.token) tempDownloads.delete(task.token);
+        taskQueue.delete(id);
+        cleared++;
+      }
+    }
+    res.json({ ok: true, cleared });
+  });
+
+  // ============ 下载调度器（最多3并发） ============
+  const MAX_CONCURRENT_DOWNLOADS = 3;
+  const btClients = new Map(); // taskId -> WebTorrent client
+  let wtClient = null;
+  function getWTClient() {
+    if (!wtClient && WebTorrent) {
+      try { wtClient = new WebTorrent(); } catch(e) { console.log('WebTorrent init failed:', e.message); }
+    }
+    return wtClient;
+  }
+  function processDownloadQueue() {
+    const active = Array.from(taskQueue.values()).filter(t => t.status === 'downloading' && (t.type === 'url-download' || t.type === 'bt-download')).length;
+    if (active >= MAX_CONCURRENT_DOWNLOADS) return;
+    const pending = Array.from(taskQueue.values())
+      .filter(t => t.status === 'pending' && (t.type === 'url-download' || t.type === 'bt-download'))
+      .sort((a, b) => a.createdAt - b.createdAt);
+    for (const task of pending) {
+      if (active >= MAX_CONCURRENT_DOWNLOADS) break;
+      if (task.type === 'url-download') startUrlDownload(task.id);
+      else if (task.type === 'bt-download') startBTDownload(task.id);
+    }
+  }
+
+  // ============ API: BT 下载 ============
+  app_express.post('/api/bt/download', auth, (req, res) => {
+    const { torrentPath, destPath } = req.body;
+    if (!torrentPath) return res.status(400).json({ error: 'torrentPath required' });
+    if (!WebTorrent) return res.status(500).json({ error: 'WebTorrent not available' });
+    const torrentFull = resolveSafePath(torrentPath);
+    if (!torrentFull || !fs.existsSync(torrentFull)) return res.status(404).json({ error: 'Torrent file not found' });
+    const dest = destPath ? resolveSafePath(destPath) : path.join(INSTALL_DIR, '下载');
+    if (!dest) return res.status(400).json({ error: 'Invalid dest path' });
+    fs.mkdirSync(dest, { recursive: true });
+    const taskId = createTask('bt-download', `BT: ${path.basename(torrentPath)}`, 0, {
+      torrentPath: torrentFull, destPath: dest, status: 'pending'
+    });
+    updateTask(taskId, { status: 'pending' });
+    res.json({ ok: true, taskId });
+    setTimeout(processDownloadQueue, 100);
+  });
+
+  function startBTDownload(taskId) {
+    const task = taskQueue.get(taskId);
+    if (!task) return;
+    const wt = getWTClient();
+    if (!wt) { updateTask(taskId, { status: 'failed', error: 'WebTorrent init failed' }); processDownloadQueue(); return; }
+    try {
+      const torrentBuf = fs.readFileSync(task.torrentPath);
+      updateTask(taskId, { status: 'downloading' });
+      wt.add(torrentBuf, { path: task.destPath }, (torrent) => {
+        btClients.set(taskId, torrent);
+        torrent.on('download', () => {
+          const t = taskQueue.get(taskId);
+          if (!t) return;
+          const progress = torrent.length > 0 ? (torrent.downloaded / torrent.length * 100) : 0;
+          updateTask(taskId, {
+            progress: Math.min(100, Math.trunc(progress)),
+            total: torrent.length,
+            transferred: torrent.downloaded,
+            speed: torrent.downloadSpeed,
+            peers: torrent.numPeers
+          });
+        });
+        torrent.on('done', () => {
+          updateTask(taskId, { status: 'completed', progress: 100, transferred: torrent.length });
+          btClients.delete(taskId);
+          processDownloadQueue();
+        });
+        torrent.on('error', (err) => {
+          updateTask(taskId, { status: 'failed', error: err.message });
+          btClients.delete(taskId);
+          processDownloadQueue();
+        });
+      });
+    } catch(e) {
+      updateTask(taskId, { status: 'failed', error: e.message });
+      processDownloadQueue();
+    }
+  }
+
+  app_express.get('/api/bt/status/:taskId', auth, (req, res) => {
+    const task = taskQueue.get(req.params.taskId);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    const { _cancel, _pause, ...pub } = task;
+    res.json(pub);
+  });
+
+  app_express.post('/api/bt/cancel/:taskId', auth, (req, res) => {
+    const taskId = req.params.taskId;
+    const task = taskQueue.get(taskId);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    const torrent = btClients.get(taskId);
+    if (torrent) { try { torrent.destroy(); } catch(e){} btClients.delete(taskId); }
+    updateTask(taskId, { status: 'cancelled' });
+    res.json({ ok: true });
+    processDownloadQueue();
+  });
+
+  // ============ URL 下载调度（从 upload-url 重构为队列式） ============
+  function startUrlDownload(taskId) {
+    const task = taskQueue.get(taskId);
+    if (!task) return;
+    updateTask(taskId, { status: 'downloading' });
+    const { sourceUrl, destPath } = task;
+    const client = sourceUrl.startsWith('https') ? https : http;
+    (async () => {
+      try {
+        await new Promise((resolve, reject) => {
+          const fileStream = fs.createWriteStream(destPath);
+          client.get(sourceUrl, (response) => {
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+              const rUrl = response.headers.location;
+              const rClient = rUrl.startsWith('https') ? https : http;
+              rClient.get(rUrl, (r2) => {
+                const total = parseInt(r2.headers['content-length'] || '0', 10);
+                updateTask(taskId, { total });
+                let transferred = 0;
+                r2.on('data', (chunk) => {
+                  transferred += chunk.length;
+                  updateTask(taskId, { transferred, progress: total > 0 ? Math.min(100, Math.trunc(transferred/total*100)) : 0, speed: r2.socket ? r2.socket.bytesRead*8/1024 : 0 });
+                });
+                r2.pipe(fileStream);
+                fileStream.on('finish', resolve);
+                r2.on('error', reject);
+              }).on('error', reject);
+              return;
+            }
+            const total = parseInt(response.headers['content-length'] || '0', 10);
+            updateTask(taskId, { total });
+            let transferred = 0;
+            response.on('data', (chunk) => {
+              transferred += chunk.length;
+              updateTask(taskId, { transferred, progress: total > 0 ? Math.min(100, Math.trunc(transferred/total*100)) : 0 });
+            });
+            response.pipe(fileStream);
+            fileStream.on('finish', resolve);
+            response.on('error', reject);
+          }).on('error', reject);
+        });
+        updateTask(taskId, { status: 'completed', progress: 100 });
+      } catch(e) {
+        updateTask(taskId, { status: 'failed', error: e.message });
+        try { fs.unlinkSync(task.destPath); } catch(e2){}
+      }
+      processDownloadQueue();
+    })();
+  }
 
   // ============ API: CMD 远程执行（UTF-8） ============
   const cmdSessions = new Map();

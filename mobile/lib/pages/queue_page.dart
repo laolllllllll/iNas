@@ -54,6 +54,10 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
+  void _showToast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
+  }
+
   Color _getStatusColor(String status) {
     switch (status) {
       case 'completed': return const Color(0xFF81C784);
@@ -85,6 +89,10 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
       case 'upload': return Icons.upload;
       case 'copy': return Icons.content_copy;
       case 'move': return Icons.drive_file_move;
+      case 'url-download': return Icons.download;
+      case 'bt-download': return Icons.download_for_offline;
+      case 'http-server': return Icons.wifi_tethering;
+      case 'download-link': return Icons.link;
       default: return Icons.task_alt;
     }
   }
@@ -112,7 +120,19 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                 DownloadManager().tasks.removeWhere((t) => t.status == 'completed' || t.status == 'failed' || t.status == 'cancelled');
                 setState(() {});
               },
-              tooltip: '清除已完成',
+              tooltip: '清除本机已完成',
+            ),
+          if (_remoteTasks.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep),
+              onPressed: () async {
+                try {
+                  final result = await ApiService().clearQueue();
+                  _showToast('已清除 ${result['cleared']} 个已结束任务');
+                } catch (e) { _showToast('清除失败: $e'); }
+                _loadRemoteQueue();
+              },
+              tooltip: '清空远程已完成',
             ),
         ],
       ),
@@ -281,51 +301,50 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                   ],
                 ),
               ),
-              if (isActive)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 传输类任务（copy/upload/upload-url/download）：暂停/继续 + 取消
-                    if (isActive && (taskType == 'copy' || taskType == 'upload' || taskType == 'upload-url' || taskType == 'download')) ...[
-                      if (status == 'running')
-                        IconButton(
-                          icon: const Icon(Icons.pause, color: Color(0xFFFFB74D), size: 20),
-                          onPressed: () { ApiService().queueAction(task['id'], 'pause'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      if (status == 'paused')
-                        IconButton(
-                          icon: const Icon(Icons.play_arrow, color: Color(0xFF81C784), size: 20),
-                          onPressed: () { ApiService().queueAction(task['id'], 'resume'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 传输类任务：暂停/继续 + 取消
+                  if (isActive && (taskType == 'copy' || taskType == 'upload' || taskType == 'upload-url' || taskType == 'url-download' || taskType == 'bt-download' || taskType == 'download')) ...[
+                    if (status == 'running' || status == 'downloading')
                       IconButton(
-                        icon: const Icon(Icons.cancel, color: Color(0xFFEF5350), size: 20),
-                        onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
+                        icon: const Icon(Icons.pause, color: Color(0xFFFFB74D), size: 20),
+                        onPressed: () { ApiService().queueAction(task['id'], 'pause'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
-                    ],
-                    // 服务类任务（http-server/download-link）：终止
-                    if (isActive && (taskType == 'http-server' || taskType == 'download-link'))
+                    if (status == 'paused')
                       IconButton(
-                        icon: const Icon(Icons.stop_circle, color: Color(0xFFEF5350), size: 20),
-                        onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
+                        icon: const Icon(Icons.play_arrow, color: Color(0xFF81C784), size: 20),
+                        onPressed: () { ApiService().queueAction(task['id'], 'resume'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
-                    // 已结束任务：清除
-                    if (!isActive)
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Color(0xFF6B7280), size: 20),
-                        onPressed: () { ApiService().queueAction(task['id'], 'remove'); Future.delayed(const Duration(milliseconds: 300), _loadRemoteQueue); },
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.cancel, color: Color(0xFFEF5350), size: 20),
+                      onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
                   ],
-                ),
+                  // 服务类任务：终止
+                  if (isActive && (taskType == 'http-server' || taskType == 'download-link'))
+                    IconButton(
+                      icon: const Icon(Icons.stop_circle, color: Color(0xFFEF5350), size: 20),
+                      onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  // 已结束任务：清除
+                  if (!isActive)
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Color(0xFF6B7280), size: 20),
+                      onPressed: () { ApiService().queueAction(task['id'], 'remove'); Future.delayed(const Duration(milliseconds: 300), _loadRemoteQueue); },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                ],
+              ),
             ],
           ),
           if (isActive && progress > 0) ...[
