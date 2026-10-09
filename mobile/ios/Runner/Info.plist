@@ -64,6 +64,9 @@
 	<array>
 		<string>_inas._tcp</string>
 	</array>
+	<!-- 相机权限（扫码绑定设备，缺失会导致 iOS 直接闪退） -->
+	<key>NSCameraUsageDescription</key>
+	<string>iNas 需要访问相机以扫描二维码绑定 Windows 设备</string>
 	<!-- 照片库权限（保存下载的图片） -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>iNas 需要保存下载的图片到相册</string>

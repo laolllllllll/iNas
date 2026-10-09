@@ -19,11 +19,15 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
   bool _connecting = false;
   String? _error;
 
+  // mobile_scanner 控制器，管理相机生命周期
+  MobileScannerController? _scannerController;
+
   @override
   void dispose() {
     _ipController.dispose();
     _portController.dispose();
     _tokenController.dispose();
+    _scannerController?.dispose();
     super.dispose();
   }
 
@@ -58,61 +62,167 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
     }
   }
 
+  // 打开扫码页面（mobile_scanner 内部处理相机权限请求）
+  void _openScanner() {
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+    );
+    setState(() { _scanning = true; });
+  }
+
+  void _closeScanner() {
+    _scannerController?.dispose();
+    _scannerController = null;
+    if (mounted) setState(() { _scanning = false; });
+  }
+
   void _onQRDetect(BarcodeCapture capture) {
+    // 空值保护：barcodes 可能为空
+    if (capture.barcodes.isEmpty) return;
+
     final barcode = capture.barcodes.first;
-    if (barcode.rawValue != null) {
-      try {
-        final data = jsonDecode(barcode.rawValue!);
-        setState(() {
-          _ipController.text = data['ip'] ?? '';
-          _portController.text = data['port']?.toString() ?? '18080';
-          _tokenController.text = data['token'] ?? '';
-          _scanning = false;
-        });
+    final rawValue = barcode.rawValue;
+    if (rawValue == null || rawValue.isEmpty) return;
+
+    try {
+      final data = jsonDecode(rawValue);
+      if (data is! Map) return;
+
+      final ip = data['ip']?.toString() ?? '';
+      final port = data['port']?.toString() ?? '18080';
+      final token = data['token']?.toString() ?? '';
+
+      if (ip.isEmpty || token.isEmpty) return;
+
+      // 停止扫描防止重复触发
+      _scannerController?.stop();
+
+      setState(() {
+        _ipController.text = ip;
+        _portController.text = port;
+        _tokenController.text = token;
+        _scanning = false;
+      });
+
+      // 延迟关闭控制器后再连接
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _scannerController?.dispose();
+        _scannerController = null;
         _connect();
-      } catch (e) {
-        // 不是 JSON 格式，忽略
-      }
+      });
+    } catch (e) {
+      // 不是有效的 JSON 二维码，忽略继续扫描
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_scanning) {
-      return Scaffold(
+      return _buildScannerView();
+    }
+    return _buildConnectionForm();
+  }
+
+  Widget _buildScannerView() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('扫描二维码'),
         backgroundColor: Colors.black,
-        appBar: AppBar(
-          title: const Text('扫描二维码'),
-          backgroundColor: Colors.black,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _closeScanner,
         ),
-        body: Stack(
-          children: [
-            MobileScanner(
-              onDetect: _onQRDetect,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flash_on),
+            onPressed: () => _scannerController?.toggleTorch(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _scannerController?.switchCamera(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // 扫码区域，mobile_scanner 内部处理权限请求
+          MobileScanner(
+            controller: _scannerController,
+            onDetect: _onQRDetect,
+            errorBuilder: (context, error, child) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, color: Color(0xFFEF5350), size: 56),
+                      const SizedBox(height: 16),
+                      const Text(
+                        '无法访问相机',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '请在系统设置 > iNas > 相机中开启权限后重试\n\n错误: $error',
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _closeScanner,
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('返回手动输入'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4FC3F7),
+                          foregroundColor: const Color(0xFF1A1A2E),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          // 扫描框
+          Center(
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFF4FC3F7), width: 2),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    '扫描 Windows 端 iNas 窗口中的二维码',
-                    style: TextStyle(color: Colors.white, fontSize: 14),
-                  ),
+          ),
+          // 底部提示
+          Positioned(
+            bottom: 40,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  '将二维码放入框内，自动扫描',
+                  style: TextStyle(color: Colors.white, fontSize: 14),
                 ),
               ),
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildConnectionForm() {
     return AlertDialog(
       backgroundColor: const Color(0xFF1E1E2E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -149,18 +259,14 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: const TextStyle(color: Color(0xFFEF5350), fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
+              Text(_error!, style: const TextStyle(color: Color(0xFFEF5350), fontSize: 13), textAlign: TextAlign.center),
             ],
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => setState(() => _scanning = true),
+                    onPressed: _openScanner,
                     icon: const Icon(Icons.qr_code_scanner, size: 20),
                     label: const Text('扫码'),
                     style: OutlinedButton.styleFrom(
