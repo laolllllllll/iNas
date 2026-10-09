@@ -249,7 +249,7 @@ async function startServer() {
   app_express.get('/api/status', (req, res) => {
     res.json({
       ok: true,
-      version: '1.1.0',
+      version: '2.2026.1010',
       hostname: os.hostname(),
       platform: os.platform(),
       totalMem: Math.trunc(os.totalmem()),

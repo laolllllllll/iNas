@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号 (如 1.0.2)'
+        description: '版本号 (如 2.2026.1010)'
         required: true
-        default: '1.0.2'
+        default: '2.2026.1010'
 
 env:
   NODE_VERSION: '16.x'
@@ -46,7 +46,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           else
-            echo "VERSION=1.0.2" >> $GITHUB_OUTPUT
+            echo "VERSION=2.2026.1010" >> $GITHUB_OUTPUT
           fi
           echo "Building version: ${{ steps.version.outputs.VERSION }}"
 
