@@ -555,7 +555,7 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(color: selected ? const Color(0xFF4FC3F7) : const Color(0xFF1E1E2E),
                       borderRadius: BorderRadius.circular(8), border: Border.all(color: selected ? const Color(0xFF4FC3F7) : const Color(0xFF2A2A3E))),
-                    child: Text('$letter:', style: TextStyle(color: selected ? const Color(0xFF1A1A2E) : const Color(0xFF90A4AE), fontWeight: selected ? FontWeight.bold : FontWeight.normal, fontSize: 13)))));
+                    child: Text('$letter:', style: TextStyle(color: selected ? const Color(0xFF1A1A2E) : const Color(0xFF90A4AE), fontWeight: selected ? FontWeight.bold : FontWeight.normal, fontSize: 13))));
               })),
         // 地址栏
         Container(margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
