@@ -1,7 +1,7 @@
 {
   "name": "inas",
-  "version": "1.0.2",
-  "description": "iNas - Cross-platform file manager with remote CMD",
+  "version": "2.2026.1010",
+  "description": "iNas - Application Platform v2",
   "main": "main.js",
   "author": "cor",
   "license": "MIT",

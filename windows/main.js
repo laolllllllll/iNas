@@ -17,28 +17,52 @@ const DATA_DIR = path.join(INSTALL_DIR, 'System', 'data');
 const RECYCLE_BIN = path.join(INSTALL_DIR, '回收站');
 const TRASH_META = path.join(RECYCLE_BIN, '.trash.json');
 const TOKEN_FILE = path.join(DATA_DIR, 'token.json');
+const APP_DIR = path.join(INSTALL_DIR, 'var', 'library', 'Application');
+const VAR_DB = path.join(INSTALL_DIR, 'var', 'db');
+const DEVICES_FILE = path.join(VAR_DB, 'devices.json');
+const MESSAGES_FILE = path.join(VAR_DB, 'messages.json');
+const SERVER_NAME_FILE = path.join(DATA_DIR, 'server-name.json');
+const PHOTOS_DIR = path.join(INSTALL_DIR, 'Photos');
 
 // 受保护目录定义
 const PROTECTED_DIRS = {
   '音乐': 'music',
-  '视频': 'video',
-  '图片': 'image',
+  'Photos': 'photos',
   '下载': 'download',
   '回收站': 'recycle',
-  'System': 'system'
+  'System': 'system',
+  'var': 'system'
 };
 
 // 确保目录存在
-[INSTALL_DIR, DATA_DIR, RECYCLE_BIN,
+[INSTALL_DIR, DATA_DIR, RECYCLE_BIN, APP_DIR, VAR_DB, PHOTOS_DIR,
  path.join(INSTALL_DIR, '音乐'),
- path.join(INSTALL_DIR, '视频'),
- path.join(INSTALL_DIR, '图片'),
  path.join(INSTALL_DIR, '下载')
 ].forEach(d => { try { fs.mkdirSync(d, { recursive: true }); } catch(e){} });
 
-// 确保 .trash.json 存在
+// 迁移旧的 图片/视频 目录到 Photos
+['图片', '视频'].forEach(oldDir => {
+  const oldPath = path.join(INSTALL_DIR, oldDir);
+  if (fs.existsSync(oldPath)) {
+    try {
+      const entries = fs.readdirSync(oldPath);
+      entries.forEach(f => {
+        try { fs.renameSync(path.join(oldPath, f), path.join(PHOTOS_DIR, f)); } catch(e){}
+      });
+      fs.rmSync(oldPath, { recursive: true, force: true });
+    } catch(e){}
+  }
+});
+
+// 确保数据文件存在
 if (!fs.existsSync(TRASH_META)) {
   try { fs.writeFileSync(TRASH_META, JSON.stringify({ items: [] }, null, 2)); } catch(e){}
+}
+if (!fs.existsSync(DEVICES_FILE)) {
+  try { fs.writeFileSync(DEVICES_FILE, JSON.stringify({ devices: [] }, null, 2)); } catch(e){}
+}
+if (!fs.existsSync(MESSAGES_FILE)) {
+  try { fs.writeFileSync(MESSAGES_FILE, JSON.stringify({ messages: [] }, null, 2)); } catch(e){}
 }
 
 // ============ Token 管理 ============
@@ -881,6 +905,288 @@ async function startServer() {
       if (dl.expiresAt < now) tempDownloads.delete(token);
     }
   }, 300000);
+
+
+  // ============ v2: 设备连接与命名 ============
+  app_express.post('/api/connect', auth, (req, res) => {
+    const { deviceName } = req.body;
+    if (!deviceName || !deviceName.trim()) {
+      return res.status(400).json({ error: 'Device name required' });
+    }
+    const name = deviceName.trim();
+    try {
+      const data = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8'));
+      // 检查重名
+      const existing = data.devices.find(d => d.name === name);
+      if (existing) {
+        // 更新连接时间
+        existing.lastConnected = Date.now();
+        fs.writeFileSync(DEVICES_FILE, JSON.stringify(data, null, 2));
+        return res.json({ ok: true, deviceId: existing.id, name });
+      }
+      // 限制最多10台
+      if (data.devices.length >= 10) {
+        return res.status(403).json({ error: 'Maximum 10 devices reached' });
+      }
+      const deviceId = crypto.randomBytes(8).toString('hex');
+      data.devices.push({ id: deviceId, name, connectedAt: Date.now(), lastConnected: Date.now() });
+      fs.writeFileSync(DEVICES_FILE, JSON.stringify(data, null, 2));
+      res.json({ ok: true, deviceId, name });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ============ v2: 设备管理 ============
+  app_express.get('/api/devices', auth, (req, res) => {
+    try {
+      const data = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8'));
+      res.json({ devices: data.devices });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+  app_express.delete('/api/devices/:id', auth, (req, res) => {
+    try {
+      const data = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8'));
+      data.devices = data.devices.filter(d => d.id !== req.params.id);
+      fs.writeFileSync(DEVICES_FILE, JSON.stringify(data, null, 2));
+      res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ============ v2: 电源控制 ============
+  app_express.post('/api/power/shutdown', auth, (req, res) => {
+    res.json({ ok: true, message: 'Shutting down...' });
+    setTimeout(() => { exec('shutdown /s /t 0', (err) => { if (err) console.error(err); }); }, 1000);
+  });
+  app_express.post('/api/power/restart', auth, (req, res) => {
+    res.json({ ok: true, message: 'Restarting...' });
+    setTimeout(() => { exec('shutdown /r /t 0', (err) => { if (err) console.error(err); }); }, 1000);
+  });
+
+  // ============ v2: 设置 - 服务器名字 ============
+  app_express.get('/api/settings/server-name', auth, (req, res) => {
+    try {
+      let name = os.hostname();
+      if (fs.existsSync(SERVER_NAME_FILE)) {
+        const d = JSON.parse(fs.readFileSync(SERVER_NAME_FILE, 'utf8'));
+        name = d.name || os.hostname();
+      }
+      res.json({ name });
+    } catch(e) { res.json({ name: os.hostname() }); }
+  });
+  app_express.post('/api/settings/server-name', auth, (req, res) => {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+    try {
+      fs.writeFileSync(SERVER_NAME_FILE, JSON.stringify({ name, updatedAt: Date.now() }));
+      res.json({ ok: true, name });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ============ v2: 服务器信息 ============
+  app_express.get('/api/server-info', auth, (req, res) => {
+    try {
+      let serverName = os.hostname();
+      if (fs.existsSync(SERVER_NAME_FILE)) {
+        serverName = JSON.parse(fs.readFileSync(SERVER_NAME_FILE, 'utf8')).name || os.hostname();
+      }
+      // 统计文件数量
+      let musicCount = 0, appCount = 0, photoCount = 0;
+      try { musicCount = fs.readdirSync(path.join(INSTALL_DIR, '音乐')).length; } catch(e){}
+      try { appCount = fs.readdirSync(APP_DIR).filter(d => d.endsWith('.app')).length; } catch(e){}
+      try { photoCount = fs.readdirSync(PHOTOS_DIR).length; } catch(e){}
+      // 磁盘空间
+      const drives = [];
+      for (let i = 67; i <= 90; i++) {
+        const letter = String.fromCharCode(i);
+        const dp = `${letter}:\\`;
+        try {
+          if (fs.existsSync(dp)) {
+            const { execSync } = require('child_process');
+            try {
+              const out = execSync(`wmic logicaldisk where "DeviceID='${letter}:'" get Size,FreeSpace /format:csv`, { encoding: 'utf8' });
+              const lines = out.trim().split('\n').filter(l => l.includes(','));
+              if (lines.length > 0) {
+                const parts = lines[0].split(',');
+                const freeSpace = parseInt(parts[1]) || 0;
+                const size = parseInt(parts[2]) || 0;
+                drives.push({ letter, name: `${letter}:`, size, freeSpace, used: size - freeSpace });
+              }
+            } catch(e2) { drives.push({ letter, name: `${letter}:`, size: 0, freeSpace: 0, used: 0 }); }
+          }
+        } catch(e){}
+      }
+      res.json({
+        serverName,
+        hostname: os.hostname(),
+        windowsVersion: `${os.release()} (${os.version()})`,
+        inasVersion: '2.2026.1010',
+        stats: { musicCount, appCount, photoCount },
+        drives,
+        totalMem: Math.trunc(os.totalmem()),
+        freeMem: Math.trunc(os.freemem())
+      });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ============ v2: 服务管理 ============
+  app_express.post('/api/service/stop', auth, (req, res) => {
+    res.json({ ok: true, message: 'Stopping iNas service...' });
+    setTimeout(() => { app.quit(); }, 500);
+  });
+  app_express.post('/api/service/restart', auth, (req, res) => {
+    res.json({ ok: true, message: 'Restarting iNas service...' });
+    setTimeout(() => { app.relaunch(); app.quit(); }, 500);
+  });
+
+  // ============ v2: 消息系统 ============
+  app_express.get('/api/messages', auth, (req, res) => {
+    try {
+      const data = JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8'));
+      res.json({ messages: data.messages.slice(-200) });
+    } catch(e) { res.json({ messages: [] }); }
+  });
+  app_express.post('/api/messages', auth, (req, res) => {
+    const { deviceName, content } = req.body;
+    if (!deviceName || !content) return res.status(400).json({ error: 'deviceName and content required' });
+    try {
+      const data = JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8'));
+      const msg = { id: crypto.randomBytes(8).toString('hex'), deviceName: deviceName.trim(), content: content.trim(), timestamp: Date.now() };
+      data.messages.push(msg);
+      if (data.messages.length > 500) data.messages = data.messages.slice(-500);
+      fs.writeFileSync(MESSAGES_FILE, JSON.stringify(data, null, 2));
+      res.json({ ok: true, message: msg });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ============ v2: NAP 应用管理 ============
+  const napUpload = multer({ storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, require('os').tmpdir()),
+    filename: (req, file, cb) => cb(null, `nap_${Date.now()}.nap`)
+  })});
+
+  function parseAppInfo(appPath) {
+    try {
+      const infoPlistPath = path.join(appPath, 'Info.plist');
+      if (!fs.existsSync(infoPlistPath)) return null;
+      const content = fs.readFileSync(infoPlistPath, 'utf8');
+      // 简单解析 plist XML
+      const bundleId = (content.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/) || [])[1] || '';
+      const name = (content.match(/<key>CFBundleName<\/key>\s*<string>([^<]+)<\/string>/) || [])[1] || path.basename(appPath, '.app');
+      const version = (content.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/) || [])[1] || '1.0';
+      const icon = (content.match(/<key>CFBundleIconFile<\/key>\s*<string>([^<]+)<\/string>/) || [])[1] || '';
+      return { bundleId, name, version, icon, path: appPath };
+    } catch(e) { return null; }
+  }
+
+  app_express.get('/api/apps', auth, (req, res) => {
+    try {
+      if (!fs.existsSync(APP_DIR)) return res.json({ apps: [] });
+      const entries = fs.readdirSync(APP_DIR).filter(d => d.endsWith('.app'));
+      const apps = [];
+      for (const entry of entries) {
+        const info = parseAppInfo(path.join(APP_DIR, entry));
+        if (info) apps.push(info);
+      }
+      res.json({ apps });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app_express.post('/api/apps/install', auth, napUpload.single('file'), async (req, res) => {
+    try {
+      let napPath = null;
+      if (req.file) {
+        napPath = req.file.path;
+      } else if (req.body && req.body.url) {
+        // 从 URL 下载
+        const url = req.body.url;
+        napPath = path.join(os.tmpdir(), `nap_dl_${Date.now()}.nap`);
+        const client = url.startsWith('https') ? https : http;
+        await new Promise((resolve, reject) => {
+          const fileStream = fs.createWriteStream(napPath);
+          client.get(url, (response) => {
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+              const rUrl = response.headers.location;
+              const rc = rUrl.startsWith('https') ? https : http;
+              rc.get(rUrl, (r2) => { r2.pipe(fileStream); fileStream.on('finish', resolve); }).on('error', reject);
+              return;
+            }
+            response.pipe(fileStream);
+            fileStream.on('finish', resolve);
+          }).on('error', reject);
+        });
+      } else {
+        return res.status(400).json({ error: 'No file or url provided' });
+      }
+      // 解压 NAP（ZIP 格式）
+      const extractDir = path.join(os.tmpdir(), `nap_extract_${Date.now()}`);
+      fs.mkdirSync(extractDir, { recursive: true });
+      const { execSync } = require('child_process');
+      execSync(`powershell -Command "Expand-Archive -Path '${napPath}' -DestinationPath '${extractDir}' -Force"`, { timeout: 30000 });
+      // 找到 Payload 下的 .app 目录
+      const payloadDir = path.join(extractDir, 'Payload');
+      if (!fs.existsSync(payloadDir)) {
+        return res.status(400).json({ error: 'Invalid NAP: no Payload directory' });
+      }
+      const appEntries = fs.readdirSync(payloadDir).filter(d => d.endsWith('.app'));
+      if (appEntries.length === 0) {
+        return res.status(400).json({ error: 'Invalid NAP: no .app in Payload' });
+      }
+      const appName = appEntries[0];
+      const srcApp = path.join(payloadDir, appName);
+      const destApp = path.join(APP_DIR, appName);
+      // 如果已存在，先删除
+      if (fs.existsSync(destApp)) fs.rmSync(destApp, { recursive: true, force: true });
+      fs.cpSync(srcApp, destApp, { recursive: true });
+      const info = parseAppInfo(destApp);
+      // 清理临时文件
+      try { fs.unlinkSync(napPath); } catch(e){}
+      try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch(e){}
+      res.json({ ok: true, app: info });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app_express.delete('/api/apps/:bundleId', auth, (req, res) => {
+    try {
+      const { bundleId } = req.params;
+      if (!fs.existsSync(APP_DIR)) return res.status(404).json({ error: 'No apps installed' });
+      const entries = fs.readdirSync(APP_DIR).filter(d => d.endsWith('.app'));
+      for (const entry of entries) {
+        const info = parseAppInfo(path.join(APP_DIR, entry));
+        if (info && info.bundleId === bundleId) {
+          fs.rmSync(path.join(APP_DIR, entry), { recursive: true, force: true });
+          return res.json({ ok: true, bundleId });
+        }
+      }
+      res.status(404).json({ error: 'App not found' });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // 静态 serve 应用资源
+  app_express.get('/api/apps/:bundleId/*', auth, (req, res) => {
+    try {
+      const { bundleId } = req.params;
+      const resourcePath = req.params[0] || 'index.html';
+      if (!fs.existsSync(APP_DIR)) return res.status(404).json({ error: 'App not found' });
+      const entries = fs.readdirSync(APP_DIR).filter(d => d.endsWith('.app'));
+      for (const entry of entries) {
+        const info = parseAppInfo(path.join(APP_DIR, entry));
+        if (info && info.bundleId === bundleId) {
+          const filePath = path.join(APP_DIR, entry, resourcePath);
+          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            return res.sendFile(filePath);
+          }
+          // 回退到 index.html
+          const indexPath = path.join(APP_DIR, entry, 'index.html');
+          if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+          return res.status(404).json({ error: 'Resource not found' });
+        }
+      }
+      res.status(404).json({ error: 'App not found' });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
 
   // ============ 启动服务 ============
   serverPort = await findAvailablePort(18080);

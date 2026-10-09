@@ -308,6 +308,63 @@ class ApiService {
     return response.data;
   }
 
+  // ============ v2: 设备连接 ============
+  Future<Map<String, dynamic>> connectDevice(String deviceName) async {
+    final response = await _dio.post('$_baseUrl/api/connect',
+      data: {'deviceName': deviceName}, options: Options(headers: _headers));
+    return response.data;
+  }
+
+  // ============ v2: 设备管理 ============
+  Future<List<dynamic>> getDevices() async {
+    final response = await _dio.get('$_baseUrl/api/devices', options: Options(headers: _headers));
+    return response.data['devices'] ?? [];
+  }
+  Future<void> deleteDevice(String id) async {
+    await _dio.delete('$_baseUrl/api/devices/$id', options: Options(headers: _headers));
+  }
+
+  // ============ v2: 电源控制 ============
+  Future<void> shutdown() async {
+    await _dio.post('$_baseUrl/api/power/shutdown', options: Options(headers: _headers));
+  }
+  Future<void> restart() async {
+    await _dio.post('$_baseUrl/api/power/restart', options: Options(headers: _headers));
+  }
+
+  // ============ v2: 服务器信息 ============
+  Future<Map<String, dynamic>> getServerInfo() async {
+    final response = await _dio.get('$_baseUrl/api/server-info', options: Options(headers: _headers));
+    return response.data;
+  }
+  Future<String> getServerName() async {
+    final response = await _dio.get('$_baseUrl/api/settings/server-name', options: Options(headers: _headers));
+    return response.data['name'] ?? '';
+  }
+  Future<void> setServerName(String name) async {
+    await _dio.post('$_baseUrl/api/settings/server-name',
+      data: {'name': name}, options: Options(headers: _headers));
+  }
+
+  // ============ v2: 服务管理 ============
+  Future<void> stopService() async {
+    await _dio.post('$_baseUrl/api/service/stop', options: Options(headers: _headers));
+  }
+  Future<void> restartService() async {
+    await _dio.post('$_baseUrl/api/service/restart', options: Options(headers: _headers));
+  }
+
+  // ============ v2: 消息 ============
+  Future<List<dynamic>> getMessages() async {
+    final response = await _dio.get('$_baseUrl/api/messages', options: Options(headers: _headers));
+    return response.data['messages'] ?? [];
+  }
+  Future<Map<String, dynamic>> sendMessage(String deviceName, String content) async {
+    final response = await _dio.post('$_baseUrl/api/messages',
+      data: {'deviceName': deviceName, 'content': content}, options: Options(headers: _headers));
+    return response.data;
+  }
+
   // ============ 测试连接 ============
   Future<bool> testConnection() async {
     try {

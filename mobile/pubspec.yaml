@@ -1,12 +1,10 @@
 name: inas
-description: iNas - Cross-platform file manager with remote CMD terminal
+description: iNas - Application Platform v2
 publish_to: 'none'
-version: 1.0.2+3
-
+version: 2.2026.1010+1
 environment:
   sdk: '>=3.0.0 <4.0.0'
   flutter: '>=3.10.0'
-
 dependencies:
   flutter:
     sdk: flutter
@@ -24,12 +22,14 @@ dependencies:
   file_picker: ^6.1.1
   intl: ^0.18.1
   uuid: ^4.2.1
-
+  camera: ^0.10.5+2
+  just_audio: ^0.9.36
+  wakelock: ^0.6.2
+  image_picker: ^1.0.4
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-
 flutter:
   uses-material-design: true
   assets:
