@@ -47,14 +47,10 @@ jobs:
 
       - name: 生成/修复 iOS 工程
         run: |
-          # 备份自定义文件
+          # 备份自定义 Info.plist
           if [ -f "ios/Runner/Info.plist" ]; then
             cp ios/Runner/Info.plist /tmp/Info.plist.custom
             echo "已备份自定义 Info.plist"
-          fi
-          if [ -f "ios/Podfile" ]; then
-            cp ios/Podfile /tmp/Podfile.custom
-            echo "已备份自定义 Podfile"
           fi
           
           # 如果没有完整的 Xcode 工程，删除 ios 目录重新生成
@@ -66,21 +62,18 @@ jobs:
             echo "iOS Xcode 工程已存在"
           fi
           
-          # 恢复自定义 Info.plist
+          # 恢复自定义 Info.plist（覆盖 flutter create 生成的默认版本）
           if [ -f "/tmp/Info.plist.custom" ]; then
             cp /tmp/Info.plist.custom ios/Runner/Info.plist
             echo "已恢复自定义 Info.plist"
           fi
           
-          # 恢复自定义 Podfile（含无签名构建配置）
-          if [ -f "/tmp/Podfile.custom" ]; then
-            cp /tmp/Podfile.custom ios/Podfile
-            echo "已恢复自定义 Podfile"
-          fi
+          # 使用 flutter create 生成的默认 Podfile（--no-codesign 处理无签名构建）
+          echo "Podfile:"
+          head -5 ios/Podfile
           
           echo "iOS 工程结构:"
           ls -la ios/
-          ls -la ios/Runner/ | head -20
 
       - name: 安装依赖
         run: |
