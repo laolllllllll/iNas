@@ -405,4 +405,31 @@ class ApiService {
     final response = await _dio.post('$_baseUrl/api/queue/clear', options: Options(headers: _headers));
     return Map<String, dynamic>.from(response.data);
   }
+
+  // ============ 相册最近删除 ============
+  Future<List<dynamic>> getRecentlyDeleted() async {
+    final response = await _dio.get('$_baseUrl/api/photos/recently-deleted', options: Options(headers: _headers));
+    return (response.data['entries'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> softDeletePhotos(List<String> files) async {
+    final response = await _dio.post('$_baseUrl/api/photos/soft-delete', data: {'files': files}, options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  Future<Map<String, dynamic>> recoverPhotos(List<String> files) async {
+    final response = await _dio.post('$_baseUrl/api/photos/recover', data: {'files': files}, options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  Future<Map<String, dynamic>> purgePhotos(List<String> files) async {
+    final response = await _dio.post('$_baseUrl/api/photos/purge', data: {'files': files}, options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  // ============ 压缩包解压 ============
+  Future<Map<String, dynamic>> extractArchive(String path, {String? password}) async {
+    final response = await _dio.post('$_baseUrl/api/extract', data: {'path': path, if (password != null) 'password': password}, options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
 }

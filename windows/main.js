@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const QRCode = require('qrcode');
+const AdmZip = require('adm-zip');
 const { exec, spawn } = require('child_process');
 const http = require('http');
 const https = require('https');
@@ -56,6 +57,14 @@ const PROTECTED_DIRS = {
     } catch(e){}
   }
 });
+
+// 最近删除目录
+const RECENTLY_DELETED_DIR = path.join(PHOTOS_DIR, '最近删除');
+const RECENTLY_DELETED_META = path.join(RECENTLY_DELETED_DIR, '.deleted.json');
+fs.mkdirSync(RECENTLY_DELETED_DIR, { recursive: true });
+if (!fs.existsSync(RECENTLY_DELETED_META)) {
+  try { fs.writeFileSync(RECENTLY_DELETED_META, JSON.stringify({ items: {} }, null, 2)); } catch(e){}
+}
 
 // 确保数据文件存在
 if (!fs.existsSync(TRASH_META)) {
@@ -1369,6 +1378,175 @@ async function startServer() {
         }
       }
       res.status(404).json({ error: 'App not found' });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ============ 相册：最近删除 ============
+  function readDeletedMeta() {
+    try { return JSON.parse(fs.readFileSync(RECENTLY_DELETED_META, 'utf8')); } catch(e) { return { items: {} }; }
+  }
+  function writeDeletedMeta(meta) {
+    try { fs.writeFileSync(RECENTLY_DELETED_META, JSON.stringify(meta, null, 2)); } catch(e){}
+  }
+  function cleanupExpiredDeleted() {
+    const meta = readDeletedMeta();
+    const now = Date.now();
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    let changed = false;
+    for (const [filename, ts] of Object.entries(meta.items)) {
+      if (now - ts > THIRTY_DAYS) {
+        const fp = path.join(RECENTLY_DELETED_DIR, filename);
+        try { if (fs.existsSync(fp)) fs.rmSync(fp, { recursive: true, force: true }); } catch(e){}
+        delete meta.items[filename];
+        changed = true;
+      }
+    }
+    if (changed) writeDeletedMeta(meta);
+    return meta;
+  }
+
+  app_express.get('/api/photos/recently-deleted', auth, (req, res) => {
+    try {
+      const meta = cleanupExpiredDeleted();
+      const entries = [];
+      for (const [filename, deletedAt] of Object.entries(meta.items)) {
+        const fp = path.join(RECENTLY_DELETED_DIR, filename);
+        if (!fs.existsSync(fp)) continue;
+        const stat = fs.statSync(fp);
+        entries.push({ name: filename, deletedAt, size: stat.size, isDirectory: stat.isDirectory() });
+      }
+      entries.sort((a, b) => b.deletedAt - a.deletedAt);
+      res.json({ entries });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app_express.post('/api/photos/soft-delete', auth, (req, res) => {
+    try {
+      const { files } = req.body;
+      if (!Array.isArray(files) || files.length === 0) return res.status(400).json({ error: 'files required' });
+      const meta = readDeletedMeta();
+      const now = Date.now();
+      let count = 0;
+      for (const filename of files) {
+        const src = path.join(PHOTOS_DIR, filename);
+        if (!fs.existsSync(src)) continue;
+        // 避免重名
+        let destName = filename;
+        let dest = path.join(RECENTLY_DELETED_DIR, destName);
+        if (fs.existsSync(dest)) {
+          const ext = path.extname(filename);
+          const base = path.basename(filename, ext);
+          let i = 1;
+          while (fs.existsSync(path.join(RECENTLY_DELETED_DIR, `${base}_${i}${ext}`))) i++;
+          destName = `${base}_${i}${ext}`;
+          dest = path.join(RECENTLY_DELETED_DIR, destName);
+        }
+        fs.renameSync(src, dest);
+        meta.items[destName] = now;
+        count++;
+      }
+      writeDeletedMeta(meta);
+      res.json({ ok: true, moved: count });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app_express.post('/api/photos/recover', auth, (req, res) => {
+    try {
+      const { files } = req.body;
+      if (!Array.isArray(files)) return res.status(400).json({ error: 'files required' });
+      const meta = readDeletedMeta();
+      let count = 0;
+      for (const filename of files) {
+        const src = path.join(RECENTLY_DELETED_DIR, filename);
+        if (!fs.existsSync(src)) continue;
+        let dest = path.join(PHOTOS_DIR, filename);
+        if (fs.existsSync(dest)) {
+          const ext = path.extname(filename);
+          const base = path.basename(filename, ext);
+          let i = 1;
+          while (fs.existsSync(path.join(PHOTOS_DIR, `${base}_${i}${ext}`))) i++;
+          dest = path.join(PHOTOS_DIR, `${base}_${i}${ext}`);
+        }
+        fs.renameSync(src, dest);
+        delete meta.items[filename];
+        count++;
+      }
+      writeDeletedMeta(meta);
+      res.json({ ok: true, recovered: count });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  app_express.post('/api/photos/purge', auth, (req, res) => {
+    try {
+      const { files } = req.body;
+      if (!Array.isArray(files)) return res.status(400).json({ error: 'files required' });
+      const meta = readDeletedMeta();
+      let count = 0;
+      for (const filename of files) {
+        const fp = path.join(RECENTLY_DELETED_DIR, filename);
+        if (fs.existsSync(fp)) { try { fs.rmSync(fp, { recursive: true, force: true }); } catch(e){} }
+        delete meta.items[filename];
+        count++;
+      }
+      writeDeletedMeta(meta);
+      res.json({ ok: true, purged: count });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ============ 压缩包解压 ============
+  app_express.post('/api/extract', auth, (req, res) => {
+    try {
+      const { path: archivePath, password } = req.body;
+      if (!archivePath) return res.status(400).json({ error: 'path required' });
+      const full = resolveSafePath(archivePath);
+      if (!full || !fs.existsSync(full)) return res.status(404).json({ error: 'Archive not found' });
+      const ext = path.extname(full).toLowerCase();
+      if (ext !== '.zip') return res.status(400).json({ error: '仅支持 .zip 格式解压' });
+      const baseName = path.basename(full, ext);
+      const parentDir = path.dirname(full);
+      let destFolder = path.join(parentDir, baseName);
+      let i = 1;
+      while (fs.existsSync(destFolder)) { destFolder = path.join(parentDir, `${baseName}_${i}`); i++; }
+      fs.mkdirSync(destFolder, { recursive: true });
+      const taskId = createTask('extract', `解压: ${path.basename(full)}`, 0, { destFolder });
+      res.json({ ok: true, taskId, destFolder });
+      // 异步执行解压
+      setImmediate(() => {
+        try {
+          const zip = new AdmZip(full);
+          const entries = zip.getEntries();
+          const total = entries.length;
+          let done = 0;
+          updateTask(taskId, { status: 'downloading', total });
+          for (const entry of entries) {
+            const task = taskQueue.get(taskId);
+            if (task && task.status === 'cancelled') { updateTask(taskId, { status: 'cancelled' }); return; }
+            try {
+              if (entry.isDirectory) {
+                fs.mkdirSync(path.join(destFolder, entry.entryName), { recursive: true });
+              } else {
+                const data = entry.getData(password);
+                const outPath = path.join(destFolder, entry.entryName);
+                fs.mkdirSync(path.dirname(outPath), { recursive: true });
+                fs.writeFileSync(outPath, data);
+              }
+            } catch(e) {
+              // 密码错误或其他错误
+              if (e.message && (e.message.includes('password') || e.message.includes('Wrong') || e.message.includes('invalid'))) {
+                updateTask(taskId, { status: 'failed', error: '需要密码或密码错误' });
+              } else {
+                updateTask(taskId, { status: 'failed', error: e.message });
+              }
+              return;
+            }
+            done++;
+            updateTask(taskId, { progress: Math.min(100, Math.trunc(done / total * 100)), transferred: done });
+          }
+          updateTask(taskId, { status: 'completed', progress: 100, transferred: total });
+        } catch(e) {
+          updateTask(taskId, { status: 'failed', error: e.message });
+        }
+      });
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 

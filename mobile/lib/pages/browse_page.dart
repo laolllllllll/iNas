@@ -218,6 +218,9 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
         // 文件：启用下载链接
         if (!_isRecycle && !file.isDirectory)
           _buildMenuItem(Icons.link, '启用下载链接', () { Navigator.pop(ctx); _createDownloadLink(file); }),
+        // 压缩包：解压
+        if (!_isRecycle && !file.isDirectory && _isArchive(file.name))
+          _buildMenuItem(Icons.unarchive, '解压', () { Navigator.pop(ctx); _showExtractDialog(file); }, color: const Color(0xFF4FC3F7)),
         if (!_isRecycle)
           _buildMenuItem(Icons.content_copy, '复制', () { _clipboardPath = file.path; Navigator.pop(ctx); _showToast('已复制: ${file.name}'); }),
         // 受保护目录不显示重命名和删除
@@ -345,6 +348,47 @@ class _BrowsePageState extends State<BrowsePage> with AutomaticKeepAliveClientMi
       final result = await ApiService().btDownload(file.path);
       _showToast('BT 下载已加入队列: ${result['taskId']}');
     } catch (e) { _showToast('BT 下载失败: $e'); }
+  }
+
+  bool _isArchive(String name) {
+    final lower = name.toLowerCase();
+    return lower.endsWith('.zip') || lower.endsWith('.rar') || lower.endsWith('.7z');
+  }
+
+  Future<void> _showExtractDialog(FileItem file) async {
+    final passwordController = TextEditingController();
+    // 先尝试无密码解压
+    try {
+      final result = await ApiService().extractArchive(file.path);
+      _showToast('解压已加入队列: ${result['destFolder']}');
+      return;
+    } catch (e) {
+      // 如果需要密码，弹出密码输入框
+      final errMsg = e.toString();
+      if (!errMsg.contains('密码') && !errMsg.contains('password')) {
+        _showToast('解压失败: $e');
+        return;
+      }
+    }
+    // 弹出密码对话框
+    if (!mounted) return;
+    final pwd = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF1E1E2E),
+      title: Text('解压 ${file.name}', style: const TextStyle(color: Colors.white)),
+      content: TextField(controller: passwordController, obscureText: true, style: const TextStyle(color: Colors.white),
+        decoration: const InputDecoration(labelText: '压缩包密码', labelStyle: TextStyle(color: Color(0xFF6B7280)),
+          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF2A2A3E))),
+          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF4FC3F7))))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        ElevatedButton(onPressed: () => Navigator.pop(ctx, passwordController.text), child: const Text('解压')),
+      ],
+    ));
+    if (pwd == null) return;
+    try {
+      final result = await ApiService().extractArchive(file.path, password: pwd);
+      _showToast('解压已加入队列: ${result['destFolder']}');
+    } catch (e) { _showToast('解压失败: $e'); }
   }
 
   // ============ 重命名/删除 ============

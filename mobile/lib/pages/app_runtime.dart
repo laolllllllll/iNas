@@ -29,6 +29,8 @@ class _AppRuntimeState extends State<AppRuntime> {
   @override
   void initState() {
     super.initState();
+    // 隐藏 iOS 原生状态栏（应用内已有自定义状态栏）
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     _updateTime();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _updateTime());
   }
@@ -36,6 +38,8 @@ class _AppRuntimeState extends State<AppRuntime> {
   @override
   void dispose() {
     _timer?.cancel();
+    // 恢复原生状态栏
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 

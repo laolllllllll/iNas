@@ -93,6 +93,7 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
       case 'bt-download': return Icons.download_for_offline;
       case 'http-server': return Icons.wifi_tethering;
       case 'download-link': return Icons.link;
+      case 'extract': return Icons.unarchive;
       default: return Icons.task_alt;
     }
   }
@@ -305,7 +306,7 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // 传输类任务：暂停/继续 + 取消
-                  if (isActive && (taskType == 'copy' || taskType == 'upload' || taskType == 'upload-url' || taskType == 'url-download' || taskType == 'bt-download' || taskType == 'download')) ...[
+                  if (isActive && (taskType == 'copy' || taskType == 'upload' || taskType == 'upload-url' || taskType == 'url-download' || taskType == 'bt-download' || taskType == 'download' || taskType == 'extract')) ...[
                     if (status == 'running' || status == 'downloading')
                       IconButton(
                         icon: const Icon(Icons.pause, color: Color(0xFFFFB74D), size: 20),
