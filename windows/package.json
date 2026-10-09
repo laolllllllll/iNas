@@ -31,11 +31,11 @@
           "target": "dir",
           "arch": ["x64"]
         }
-      ],
-      "icon": "build/icon.ico"
+      ]
     },
     "files": [
       "main.js",
+      "index.html",
       "preload.js",
       "renderer/**/*",
       "public/**/*",
