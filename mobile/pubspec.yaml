@@ -24,7 +24,6 @@ dependencies:
   uuid: ^4.2.1
   camera: ^0.10.5+2
   just_audio: ^0.9.36
-  wakelock: ^0.6.2
   image_picker: ^1.0.4
 dev_dependencies:
   flutter_test:
