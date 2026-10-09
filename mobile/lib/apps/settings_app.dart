@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -190,7 +191,7 @@ class _SettingsAppState extends State<SettingsApp> {
           Navigator.pop(ctx);
           final url = _napUrlController.text.trim();
           if (url.isEmpty) return;
-          try { await AppService().installFromUrl(url); _showToast('安装成功'); } catch (e) { _showToast('安装失败: $e'); }
+          try { await AppService().installFromUrl(url); _showToast('安装成功'); } catch (e) { _showToast('安装失败: ${_extractError(e)}'); }
         }, child: const Text('安装')),
       ],
     ));
@@ -202,7 +203,7 @@ class _SettingsAppState extends State<SettingsApp> {
     try {
       await AppService().installFromFile(result.files.first.path!);
       _showToast('安装成功');
-    } catch (e) { _showToast('安装失败: $e'); }
+    } catch (e) { _showToast('安装失败: ${_extractError(e)}'); }
   }
 
   // ============ 本机/服务器 ============
@@ -251,4 +252,13 @@ class _SettingsAppState extends State<SettingsApp> {
   }
 
   void _showToast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
+
+  String _extractError(dynamic e) {
+    if (e is DioException && e.response?.data != null) {
+      final data = e.response!.data;
+      if (data is Map && data['error'] != null) return data['error'].toString();
+      if (data is Map && data['message'] != null) return data['message'].toString();
+    }
+    return e.toString();
+  }
 }

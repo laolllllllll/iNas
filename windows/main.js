@@ -1286,12 +1286,15 @@ async function startServer() {
   });
 
   app_express.post('/api/apps/install', auth, napUpload.single('file'), async (req, res) => {
+    let napPath = null;
+    let extractDir = null;
     try {
-      let napPath = null;
+      // 确保应用目录存在
+      fs.mkdirSync(APP_DIR, { recursive: true });
+
       if (req.file) {
         napPath = req.file.path;
       } else if (req.body && req.body.url) {
-        // 从 URL 下载
         const url = req.body.url;
         napPath = path.join(os.tmpdir(), `nap_dl_${Date.now()}.nap`);
         const client = url.startsWith('https') ? https : http;
@@ -1309,35 +1312,66 @@ async function startServer() {
           }).on('error', reject);
         });
       } else {
-        return res.status(400).json({ error: 'No file or url provided' });
+        return res.status(400).json({ success: false, error: '未提供文件或URL' });
       }
-      // 解压 NAP（ZIP 格式）
-      const extractDir = path.join(os.tmpdir(), `nap_extract_${Date.now()}`);
+
+      if (!napPath || !fs.existsSync(napPath)) {
+        return res.status(400).json({ success: false, error: 'NAP文件上传失败' });
+      }
+
+      // 用 adm-zip 解压（纯JS，不依赖系统PowerShell）
+      extractDir = path.join(os.tmpdir(), `nap_extract_${Date.now()}`);
       fs.mkdirSync(extractDir, { recursive: true });
-      const { execSync } = require('child_process');
-      execSync(`powershell -Command "Expand-Archive -Path '${napPath}' -DestinationPath '${extractDir}' -Force"`, { timeout: 30000 });
+      try {
+        const zip = new AdmZip(napPath);
+        zip.extractAllTo(extractDir, true);
+      } catch(e) {
+        return res.status(400).json({ success: false, error: 'NAP解压失败: ' + e.message + '（文件可能不是有效的ZIP/NAP格式）' });
+      }
+
       // 找到 Payload 下的 .app 目录
       const payloadDir = path.join(extractDir, 'Payload');
       if (!fs.existsSync(payloadDir)) {
-        return res.status(400).json({ error: 'Invalid NAP: no Payload directory' });
+        return res.status(400).json({ success: false, error: '无效NAP: 缺少 Payload 目录' });
       }
       const appEntries = fs.readdirSync(payloadDir).filter(d => d.endsWith('.app'));
       if (appEntries.length === 0) {
-        return res.status(400).json({ error: 'Invalid NAP: no .app in Payload' });
+        return res.status(400).json({ success: false, error: '无效NAP: Payload 中没有 .app 目录' });
       }
       const appName = appEntries[0];
       const srcApp = path.join(payloadDir, appName);
       const destApp = path.join(APP_DIR, appName);
-      // 如果已存在，先删除
-      if (fs.existsSync(destApp)) fs.rmSync(destApp, { recursive: true, force: true });
-      fs.cpSync(srcApp, destApp, { recursive: true });
-      const info = parseAppInfo(destApp);
-      // 清理临时文件
-      try { fs.unlinkSync(napPath); } catch(e){}
-      try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch(e){}
-      res.json({ ok: true, app: info });
+
+      // 如果已存在，先删除再复制
+      if (fs.existsSync(destApp)) {
+        try { fs.rmSync(destApp, { recursive: true, force: true }); } catch(e){}
+      }
+      try {
+        fs.cpSync(srcApp, destApp, { recursive: true });
+      } catch(e) {
+        return res.status(500).json({ success: false, error: '安装文件复制失败: ' + e.message });
+      }
+
+      // 解析应用信息（带兜底默认值）
+      let info = parseAppInfo(destApp);
+      if (!info) {
+        info = {
+          bundleId: 'com.cor.unknown.' + Date.now(),
+          name: path.basename(appName, '.app'),
+          version: '1.0.0',
+          icon: '',
+          path: destApp,
+        };
+      }
+
+      res.json({ success: true, app: info });
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      console.error('NAP install error:', e);
+      res.status(500).json({ success: false, error: '安装失败: ' + e.message });
+    } finally {
+      // 清理临时文件
+      if (napPath) { try { fs.unlinkSync(napPath); } catch(e){} }
+      if (extractDir) { try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch(e){} }
     }
   });
 

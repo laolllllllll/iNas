@@ -71,7 +71,9 @@ class _BrowserAppState extends State<BrowserApp> {
     AppService().installFromUrl(napUrl).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('应用安装成功'), backgroundColor: Color(0xFF66BB6A)));
     }).catchError((e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $e'), backgroundColor: Color(0xFFEF5350)));
+      String msg = e.toString();
+      try { if (e.response?.data is Map && e.response.data['error'] != null) msg = e.response.data['error'].toString(); } catch(_) {}
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $msg'), backgroundColor: Color(0xFFEF5350)));
     });
   }
 
