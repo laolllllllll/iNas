@@ -10,8 +10,9 @@ const QRCode = require('qrcode');
 const { exec, spawn } = require('child_process');
 const http = require('http');
 const https = require('https');
+// WebTorrent 运行时按需加载（不打包进 asar，首次使用时安装到运行时目录）
 let WebTorrent = null;
-try { WebTorrent = require('webtorrent'); } catch(e) { console.log('webtorrent not available:', e.message); }
+let wtInstalling = null;
 
 // ============ 配置 ============
 const INSTALL_DIR = path.join('C:', 'iNas root');
@@ -826,6 +827,32 @@ async function startServer() {
   const MAX_CONCURRENT_DOWNLOADS = 3;
   const btClients = new Map(); // taskId -> WebTorrent client
   let wtClient = null;
+  // 运行时按需安装 webtorrent 到可写目录，避免打包进 asar 导致构建超时
+  async function ensureWebTorrent() {
+    if (WebTorrent) return WebTorrent;
+    if (wtInstalling) return wtInstalling;
+    wtInstalling = (async () => {
+      const btDir = path.join(INSTALL_DIR, 'var', 'bt-runtime');
+      fs.mkdirSync(btDir, { recursive: true });
+      const pkgPath = path.join(btDir, 'package.json');
+      if (!fs.existsSync(pkgPath)) {
+        fs.writeFileSync(pkgPath, JSON.stringify({ name: 'inas-bt-runtime', version: '1.0.0', private: true }, null, 2));
+      }
+      const modPath = path.join(btDir, 'node_modules', 'webtorrent');
+      if (!fs.existsSync(modPath)) {
+        console.log('Installing webtorrent to runtime dir...');
+        await new Promise((resolve, reject) => {
+          child_process.exec('npm install webtorrent@2.1.36 --no-save --omit=dev', { cwd: btDir, timeout: 120000 }, (err, stdout, stderr) => {
+            if (err) { console.error('npm install webtorrent failed:', stderr || err.message); reject(err); }
+            else { console.log('webtorrent installed'); resolve(); }
+          });
+        });
+      }
+      WebTorrent = require(modPath);
+      return WebTorrent;
+    })();
+    try { return await wtInstalling; } finally { wtInstalling = null; }
+  }
   function getWTClient() {
     if (!wtClient && WebTorrent) {
       try { wtClient = new WebTorrent(); } catch(e) { console.log('WebTorrent init failed:', e.message); }
@@ -849,7 +876,6 @@ async function startServer() {
   app_express.post('/api/bt/download', auth, (req, res) => {
     const { torrentPath, destPath } = req.body;
     if (!torrentPath) return res.status(400).json({ error: 'torrentPath required' });
-    if (!WebTorrent) return res.status(500).json({ error: 'WebTorrent not available' });
     const torrentFull = resolveSafePath(torrentPath);
     if (!torrentFull || !fs.existsSync(torrentFull)) return res.status(404).json({ error: 'Torrent file not found' });
     const dest = destPath ? resolveSafePath(destPath) : path.join(INSTALL_DIR, '下载');
@@ -863,14 +889,18 @@ async function startServer() {
     setTimeout(processDownloadQueue, 100);
   });
 
-  function startBTDownload(taskId) {
+  async function startBTDownload(taskId) {
     const task = taskQueue.get(taskId);
     if (!task) return;
+    updateTask(taskId, { status: 'downloading' });
+    try { await ensureWebTorrent(); } catch(e) {
+      updateTask(taskId, { status: 'failed', error: 'WebTorrent install failed: ' + e.message });
+      processDownloadQueue(); return;
+    }
     const wt = getWTClient();
     if (!wt) { updateTask(taskId, { status: 'failed', error: 'WebTorrent init failed' }); processDownloadQueue(); return; }
     try {
       const torrentBuf = fs.readFileSync(task.torrentPath);
-      updateTask(taskId, { status: 'downloading' });
       wt.add(torrentBuf, { path: task.destPath }, (torrent) => {
         btClients.set(taskId, torrent);
         torrent.on('download', () => {
