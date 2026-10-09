@@ -1,0 +1,50 @@
+{
+  "name": "inas",
+  "version": "1.0.0",
+  "description": "iNas - Cross-platform file manager",
+  "main": "main.js",
+  "author": "cor",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --dir --win",
+    "build:installer": "bash build/build-installer.sh"
+  },
+  "devDependencies": {
+    "electron": "22.3.27",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "qrcode": "^1.5.3",
+    "multer": "^1.4.5-lts.1"
+  },
+  "build": {
+    "appId": "com.cor.inas",
+    "productName": "iNas",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "public/**/*",
+      "node_modules/**/*",
+      "!**/*.{md,markdown}"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/**/*"
+    ]
+  }
+}
