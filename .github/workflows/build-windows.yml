@@ -15,6 +15,9 @@ env:
   NODE_VERSION: '16.x'
   GO_VERSION: '1.21'
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
