@@ -88,7 +88,8 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            VERSION="2.2026.1010"
+            # 从 pubspec.yaml 读取版本号（去掉 +build_number 后缀）
+            VERSION=$(grep '^version:' pubspec.yaml | head -1 | sed 's/version: *//' | sed 's/+.*//' | tr -d ' ')
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "构建版本: $VERSION"

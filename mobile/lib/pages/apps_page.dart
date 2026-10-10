@@ -190,14 +190,54 @@ class _AppsPageState extends State<AppsPage> {
       onLongPress: () => _showAppMenu(app),
       child: Column(children: [
         Container(width: 60, height: 60, decoration: BoxDecoration(
-          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color, color.withOpacity(0.7)]),
           borderRadius: BorderRadius.circular(14),
           boxShadow: [BoxShadow(color: color.withOpacity(0.35), blurRadius: 10, offset: const Offset(0, 4))],
-        ), child: Icon(_getAppIcon(app), color: Colors.white, size: 30)),
+        ), child: ClipRRect(borderRadius: BorderRadius.circular(14), child: _buildIconContent(app))),
         const SizedBox(height: 6),
         Text(app.name, style: const TextStyle(color: Colors.white, fontSize: 11, shadows: [Shadow(color: Colors.black45, blurRadius: 2)]), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
       ]),
     );
+  }
+
+  /// 构建图标内容：优先真实图标，失败/为空时 fallback 到渐变色 + Material Icon
+  Widget _buildIconContent(AppInfo app) {
+    if (app.icon.isNotEmpty) {
+      return _buildRealIcon(app);
+    }
+    return _buildGradientIcon(app);
+  }
+
+  /// 渐变色 + Material Icon 的 fallback 样式
+  Widget _buildGradientIcon(AppInfo app) {
+    final color = _getAppColor(app);
+    return Container(width: 60, height: 60, decoration: BoxDecoration(
+      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color, color.withOpacity(0.7)]),
+    ), child: Icon(_getAppIcon(app), color: Colors.white, size: 30));
+  }
+
+  /// 从 app.icon 加载真实图标（支持 HTTP URL / 本地文件路径 / 相对文件名）
+  Widget _buildRealIcon(AppInfo app) {
+    final icon = app.icon.trim();
+    final token = ApiService().token;
+    final headers = token != null ? {'x-nas-token': token} : <String, String>{};
+    final fallback = _buildGradientIcon(app);
+
+    // 1. HTTP/HTTPS 完整 URL
+    if (icon.startsWith('http://') || icon.startsWith('https://')) {
+      return Image.network(icon, headers: headers, fit: BoxFit.cover, width: 60, height: 60,
+        errorBuilder: (_, __, ___) => fallback);
+    }
+
+    // 2. 本地文件绝对路径（Unix / 或 Windows C:\）
+    if (icon.startsWith('/') || RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(icon)) {
+      return Image.file(File(icon), fit: BoxFit.cover, width: 60, height: 60,
+        errorBuilder: (_, __, ___) => fallback);
+    }
+
+    // 3. 相对文件名 → 通过 AppService 拼接完整资源 URL
+    final url = AppService().getAppResourceUrl(app.bundleId, icon);
+    return Image.network(url, headers: headers, fit: BoxFit.cover, width: 60, height: 60,
+      errorBuilder: (_, __, ___) => fallback);
   }
 
   Widget _buildAddAppButton() {
