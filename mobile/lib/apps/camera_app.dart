@@ -13,46 +13,41 @@ class _CameraAppState extends State<CameraApp> {
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   int _cameraIndex = 0;
-  bool _ready = false;
+  Future<void>? _initializeFuture;
   bool _uploading = false;
   bool _switching = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initCamera());
   }
 
   Future<void> _initCamera() async {
     try {
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
-        setState(() => _error = '未找到相机');
+        if (mounted) setState(() => _initializeFuture = Future.error('未找到相机'));
         return;
       }
-      await _startCamera(_cameraIndex);
+      _startCamera(0);
     } catch (e) {
-      setState(() => _error = '相机初始化失败: $e');
+      if (mounted) setState(() => _initializeFuture = Future.error(e.toString()));
     }
   }
 
-  Future<void> _startCamera(int index) async {
+  void _startCamera(int index) {
     if (index >= _cameras.length) index = 0;
     _cameraIndex = index;
     final controller = CameraController(_cameras[index], ResolutionPreset.high);
-    try {
-      await controller.initialize();
-      if (mounted) {
-        setState(() {
-          _controller = controller;
-          _ready = true;
-          _switching = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = '相机启动失败: $e');
-    }
+    _controller = controller;
+    setState(() {
+      _initializeFuture = controller.initialize().catchError((e) {
+        if (mounted) setState(() {});
+        throw e;
+      });
+      _switching = false;
+    });
   }
 
   Future<void> _switchCamera() async {
@@ -60,9 +55,9 @@ class _CameraAppState extends State<CameraApp> {
     setState(() => _switching = true);
     final old = _controller;
     _controller = null;
-    _ready = false;
-    await _startCamera((_cameraIndex + 1) % _cameras.length);
-    old?.dispose();
+    _startCamera((_cameraIndex + 1) % _cameras.length);
+    // 延迟 dispose 旧控制器，避免影响新控制器初始化
+    Future.delayed(const Duration(milliseconds: 500), () => old?.dispose());
   }
 
   bool get _hasFrontCamera => _cameras.any((c) => c.lensDirection == CameraLensDirection.front);
@@ -105,15 +100,32 @@ class _CameraAppState extends State<CameraApp> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: _error != null
-        ? Center(child: Text(_error!, style: const TextStyle(color: Colors.white)))
-        : !_ready
-          ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      body: FutureBuilder<void>(
+        future: _initializeFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               const CircularProgressIndicator(color: AppTheme.accent),
               const SizedBox(height: 12),
               Text(_switching ? '切换摄像头...' : '正在启动相机...', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            ]))
-          : Stack(children: [
+            ]));
+          }
+          if (snapshot.hasError || _controller == null || !_controller!.value.isInitialized) {
+            return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.error_outline, color: AppTheme.danger, size: 48),
+              const SizedBox(height: 12),
+              Text('相机初始化失败', style: const TextStyle(color: Colors.white, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text(snapshot.error?.toString() ?? '未知错误', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13), textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: () { setState(() => _initializeFuture = null); _initCamera(); }, child: const Text('重试')),
+            ]));
+          }
+          // 相机预览全屏，Stack fit: expand 确保填满
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              // 最底层：相机预览，不加任何 color 容器
               CameraPreview(_controller!),
               // 顶部控制栏
               Positioned(top: 0, left: 0, right: 0,
@@ -132,11 +144,11 @@ class _CameraAppState extends State<CameraApp> {
               ),
               // 上传遮罩
               if (_uploading)
-                Container(color: Colors.black54, child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Positioned.fill(child: Container(color: Colors.black54, child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   const CircularProgressIndicator(color: AppTheme.accent),
                   const SizedBox(height: 12),
                   const Text('正在保存到相册...', style: TextStyle(color: Colors.white)),
-                ]))),
+                ])))),
               // 底部快门
               Positioned(bottom: 40, left: 0, right: 0,
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -149,7 +161,10 @@ class _CameraAppState extends State<CameraApp> {
                   ),
                 ]),
               ),
-            ]),
+            ],
+          );
+        },
+      ),
     );
   }
 }
