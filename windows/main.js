@@ -1584,6 +1584,108 @@ async function startServer() {
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
+  // ============ 音乐 API ============
+  const MUSIC_DIR = path.join(INSTALL_DIR, '音乐');
+  const MUSIC_COVERS_DIR = path.join(MUSIC_DIR, '.covers');
+  const MUSIC_META_DIR = path.join(MUSIC_DIR, '.metadata');
+  fs.mkdirSync(MUSIC_COVERS_DIR, { recursive: true });
+  fs.mkdirSync(MUSIC_META_DIR, { recursive: true });
+
+  app_express.get('/api/music/list', auth, async (req, res) => {
+    try {
+      if (!fs.existsSync(MUSIC_DIR)) return res.json({ songs: [] });
+      const files = fs.readdirSync(MUSIC_DIR).filter(f => /\.(mp3|flac|wav|m4a|aac|ogg)$/i.test(f));
+      const songs = [];
+      for (const file of files) {
+        const filePath = path.join(MUSIC_DIR, file);
+        const stat = fs.statSync(filePath);
+        let title = path.basename(file, path.extname(file));
+        let artist = '未知艺术家';
+        let album = '';
+        let duration = 0;
+        let coverPath = null;
+        try {
+          const mm = require('music-metadata');
+          const metadata = await mm.parseFile(filePath, { duration: true });
+          if (metadata.common.title) title = metadata.common.title;
+          if (metadata.common.artist) artist = metadata.common.artist;
+          if (metadata.common.album) album = metadata.common.album;
+          if (metadata.format.duration) duration = Math.round(metadata.format.duration);
+          // 检查封面
+          const coverHash = Buffer.from(title).toString('hex').slice(0, 16);
+          const coverFile = path.join(MUSIC_COVERS_DIR, `${coverHash}.jpg`);
+          if (fs.existsSync(coverFile)) coverPath = `音乐/.covers/${coverHash}.jpg`;
+        } catch(e) {
+          // 读取失败用默认值
+        }
+        // 检查 sidecar 元数据
+        const metaFile = path.join(MUSIC_META_DIR, `${path.basename(file, path.extname(file))}.json`);
+        if (fs.existsSync(metaFile)) {
+          try {
+            const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+            if (meta.title) title = meta.title;
+            if (meta.artist) artist = meta.artist;
+            if (meta.coverPath) coverPath = meta.coverPath;
+          } catch(e){}
+        }
+        songs.push({
+          path: `音乐/${file}`,
+          filename: file,
+          title, artist, album, duration,
+          size: stat.size,
+          coverPath,
+        });
+      }
+      res.json({ songs });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
+  const musicAddUpload = multer({ storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      if (file.fieldname === 'cover') cb(null, MUSIC_COVERS_DIR);
+      else cb(null, MUSIC_DIR);
+    },
+    filename: (req, file, cb) => cb(null, file.fieldname === 'cover' ? `cover_${Date.now()}.jpg` : file.originalname),
+  })});
+
+  app_express.post('/api/music/add', auth, musicAddUpload.fields([{ name: 'file', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+    try {
+      const { title, artist, mp3Path } = req.body;
+      const mp3File = req.files && req.files['file'] ? req.files['file'][0] : null;
+      const coverFile = req.files && req.files['cover'] ? req.files['cover'][0] : null;
+      let filename = null;
+      if (mp3File) {
+        filename = mp3File.filename;
+      } else if (mp3Path) {
+        const srcPath = resolveSafePath(mp3Path);
+        if (!srcPath || !fs.existsSync(srcPath)) return res.status(400).json({ error: 'MP3文件不存在' });
+        filename = path.basename(srcPath);
+        const destPath = path.join(MUSIC_DIR, filename);
+        if (srcPath !== destPath) fs.copyFileSync(srcPath, destPath);
+      } else {
+        return res.status(400).json({ error: '未提供MP3文件' });
+      }
+      const filePath = path.join(MUSIC_DIR, filename);
+      const finalTitle = title || path.basename(filename, path.extname(filename));
+      const finalArtist = artist || '未知艺术家';
+
+      // 写入 ID3 标签
+      try {
+        const nodeID3 = require('node-id3');
+        nodeID3.write({ title: finalTitle, artist: finalArtist }, filePath);
+      } catch(e) { console.error('ID3 write failed:', e.message); }
+
+      // 封面路径
+      const coverWritten = coverFile ? `音乐/.covers/${coverFile.filename}` : null;
+
+      // 保存 sidecar 元数据
+      const metaFile = path.join(MUSIC_META_DIR, `${path.basename(filename, path.extname(filename))}.json`);
+      fs.writeFileSync(metaFile, JSON.stringify({ title: finalTitle, artist: finalArtist, coverPath: coverWritten, updatedAt: Date.now() }, null, 2));
+
+      res.json({ success: true, song: { path: `音乐/${filename}`, title: finalTitle, artist: finalArtist, coverPath: coverWritten } });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
   // ============ 启动服务 ============
   serverPort = await findAvailablePort(18080);
   server = app_express.listen(serverPort, '0.0.0.0', () => {

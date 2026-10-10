@@ -432,4 +432,22 @@ class ApiService {
     final response = await _dio.post('$_baseUrl/api/extract', data: {'path': path, if (password != null) 'password': password}, options: Options(headers: _headers));
     return Map<String, dynamic>.from(response.data);
   }
+
+  // ============ 音乐 API ============
+  Future<List<dynamic>> getMusicList() async {
+    final response = await _dio.get('$_baseUrl/api/music/list', options: Options(headers: _headers));
+    return (response.data['songs'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> addMusic({String? filePath, String? mp3Path, required String title, String? artist, String? coverPath}) async {
+    final formData = FormData.fromMap({
+      if (filePath != null) 'file': await MultipartFile.fromFile(filePath),
+      if (mp3Path != null) 'mp3Path': mp3Path,
+      'title': title,
+      if (artist != null) 'artist': artist,
+      if (coverPath != null) 'cover': await MultipartFile.fromFile(coverPath),
+    });
+    final response = await _dio.post('$_baseUrl/api/music/add', data: formData, options: Options(headers: _headers));
+    return Map<String, dynamic>.from(response.data);
+  }
 }

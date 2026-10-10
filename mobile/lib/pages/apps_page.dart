@@ -57,10 +57,15 @@ class _AppsPageState extends State<AppsPage> {
 
   void _openApp(AppInfo app) {
     Widget page;
+    Future<bool> Function()? onBack;
     switch (app.bundleId) {
       case 'com.cor.iNas.Camera': page = const CameraApp(); break;
       case 'com.cor.iNas.Photos': page = const PhotosApp(); break;
-      case 'com.cor.iNas.Browser': page = const BrowserApp(); break;
+      case 'com.cor.iNas.Browser':
+        final key = GlobalKey<BrowserAppState>();
+        page = BrowserApp(key: key);
+        onBack = () => key.currentState?.tryGoBack() ?? Future.value(false);
+        break;
       case 'com.cor.iNas.Files': page = const FilesApp(); break;
       case 'com.cor.iNas.Music': page = const MusicApp(); break;
       case 'com.cor.iNas.Settings': page = const SettingsApp(); break;
@@ -69,7 +74,7 @@ class _AppsPageState extends State<AppsPage> {
       case 'com.cor.iNas.Messages': page = const MessagesApp(); break;
       default: page = NapWebViewApp(app: app);
     }
-    Navigator.push(context, MaterialPageRoute(builder: (_) => AppRuntime(child: page, title: app.name)));
+    Navigator.push(context, MaterialPageRoute(builder: (_) => AppRuntime(child: page, title: app.name, onBack: onBack)));
   }
 
   void _showAppMenu(AppInfo app) {
