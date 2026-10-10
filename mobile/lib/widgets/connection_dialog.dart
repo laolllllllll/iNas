@@ -158,7 +158,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline, color: Color(0xFFEF5350), size: 56),
+                      const Icon(Icons.error_outline, color: Color(0xFFFF3B30), size: 56),
                       const SizedBox(height: 16),
                       const Text(
                         '无法访问相机',
@@ -176,8 +176,8 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                         icon: const Icon(Icons.arrow_back),
                         label: const Text('返回手动输入'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4FC3F7),
-                          foregroundColor: const Color(0xFF1A1A2E),
+                          backgroundColor: const Color(0xFF007AFF),
+                          foregroundColor: const Color(0xFF1C1C1E),
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         ),
                       ),
@@ -193,7 +193,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFF4FC3F7), width: 2),
+                border: Border.all(color: const Color(0xFF007AFF), width: 2),
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
@@ -224,7 +224,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
 
   Widget _buildConnectionForm() {
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: const Color(0xFF2C2C2E),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Text(
         '连接 iNas 服务端',
@@ -259,7 +259,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Color(0xFFEF5350), fontSize: 13), textAlign: TextAlign.center),
+              Text(_error!, style: const TextStyle(color: Color(0xFFFF3B30), fontSize: 13), textAlign: TextAlign.center),
             ],
             const SizedBox(height: 16),
             Row(
@@ -270,8 +270,8 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                     icon: const Icon(Icons.qr_code_scanner, size: 20),
                     label: const Text('扫码'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4FC3F7),
-                      side: const BorderSide(color: Color(0xFF4FC3F7)),
+                      foregroundColor: const Color(0xFF007AFF),
+                      side: const BorderSide(color: Color(0xFF007AFF)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -282,8 +282,8 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
                   child: ElevatedButton(
                     onPressed: _connecting ? null : _connect,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4FC3F7),
-                      foregroundColor: const Color(0xFF1A1A2E),
+                      backgroundColor: const Color(0xFF007AFF),
+                      foregroundColor: const Color(0xFF1C1C1E),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -313,19 +313,19 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
       style: const TextStyle(color: Colors.white, fontSize: 15),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Color(0xFF90A4AE)),
+        labelStyle: const TextStyle(color: Color(0xFF8E8E93)),
         hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF455A64)),
-        prefixIcon: Icon(icon, color: const Color(0xFF4FC3F7), size: 20),
+        hintStyle: const TextStyle(color: Color(0xFF636366)),
+        prefixIcon: Icon(icon, color: const Color(0xFF007AFF), size: 20),
         filled: true,
-        fillColor: const Color(0xFF12121A),
+        fillColor: const Color(0xFF1C1C1E),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF2A2A3E)),
+          borderSide: const BorderSide(color: Color(0xFF38383A)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF4FC3F7)),
+          borderSide: const BorderSide(color: Color(0xFF007AFF)),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),

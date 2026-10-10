@@ -88,20 +88,20 @@ class FileIconHelper {
     final ext = fileName.contains('.') ? fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase() : '';
     switch (ext) {
       case 'py': return const Color(0xFF42A5F5);
-      case 'html': case 'htm': return const Color(0xFFFFA726);
+      case 'html': case 'htm': return const Color(0xFFFF9500);
       case 'mp3': case 'flac': case 'wav': case 'm4a': case 'aac': return const Color(0xFFEC407A);
-      case 'mp4': case 'mov': case 'avi': case 'mkv': case 'flv': return const Color(0xFFEF5350);
+      case 'mp4': case 'mov': case 'avi': case 'mkv': case 'flv': return const Color(0xFFFF3B30);
       case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp': case 'heic': case 'bmp': return const Color(0xFFAB47BC);
-      case 'torrent': return const Color(0xFF66BB6A);
+      case 'torrent': return const Color(0xFF34C759);
       case 'zip': case 'rar': case '7z': case 'nap': case 'tar': case 'gz': return const Color(0xFF8D6E63);
-      case 'txt': case 'md': case 'log': return const Color(0xFF90A4AE);
+      case 'txt': case 'md': case 'log': return const Color(0xFF8E8E93);
       case 'exe': case 'msi': case 'bat': case 'cmd': return const Color(0xFF546E7A);
-      case 'pdf': return const Color(0xFFEF5350);
+      case 'pdf': return const Color(0xFFFF3B30);
       case 'doc': case 'docx': return const Color(0xFF42A5F5);
-      case 'xls': case 'xlsx': case 'csv': return const Color(0xFF66BB6A);
-      case 'ppt': case 'pptx': return const Color(0xFFFFA726);
+      case 'xls': case 'xlsx': case 'csv': return const Color(0xFF34C759);
+      case 'ppt': case 'pptx': return const Color(0xFFFF9500);
       case 'json': case 'xml': case 'yaml': case 'yml': case 'js': case 'ts': case 'css': return const Color(0xFF26C6DA);
-      default: return const Color(0xFF90A4AE);
+      default: return const Color(0xFF8E8E93);
     }
   }
 
@@ -119,10 +119,10 @@ class FileIconHelper {
   static Color getSpecialColor(String? specialType) {
     switch (specialType) {
       case 'music': return const Color(0xFFEC407A);
-      case 'photos': return const Color(0xFFEF5350);
-      case 'download': return const Color(0xFF4FC3F7);
-      case 'recycle': return const Color(0xFFFFA726);
-      default: return const Color(0xFF4FC3F7);
+      case 'photos': return const Color(0xFFFF3B30);
+      case 'download': return const Color(0xFF007AFF);
+      case 'recycle': return const Color(0xFFFF9500);
+      default: return const Color(0xFF007AFF);
     }
   }
 }

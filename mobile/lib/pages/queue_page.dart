@@ -60,13 +60,13 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'completed': return const Color(0xFF81C784);
-      case 'failed': return const Color(0xFFEF5350);
-      case 'cancelled': return const Color(0xFF90A4AE);
-      case 'paused': return const Color(0xFFFFB74D);
+      case 'completed': return const Color(0xFF34C759);
+      case 'failed': return const Color(0xFFFF3B30);
+      case 'cancelled': return const Color(0xFF8E8E93);
+      case 'paused': return const Color(0xFFFF9500);
       case 'downloading':
-      case 'running': return const Color(0xFF4FC3F7);
-      default: return const Color(0xFF90A4AE);
+      case 'running': return const Color(0xFF007AFF);
+      default: return const Color(0xFF8E8E93);
     }
   }
 
@@ -164,12 +164,12 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
       child: Row(
         children: [
-          Text(title, style: const TextStyle(color: Color(0xFF90A4AE), fontSize: 14, fontWeight: FontWeight.bold)),
+          Text(title, style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: const Color(0xFF4FC3F7).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-            child: Text('$count', style: const TextStyle(color: Color(0xFF4FC3F7), fontSize: 12, fontWeight: FontWeight.bold)),
+            decoration: BoxDecoration(color: const Color(0xFF007AFF).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+            child: Text('$count', style: const TextStyle(color: Color(0xFF007AFF), fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -182,9 +182,9 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E2E),
+        color: const Color(0xFF2C2C2E),
         borderRadius: BorderRadius.circular(12),
-        border: isActive ? Border.all(color: const Color(0xFF4FC3F7).withOpacity(0.3)) : null,
+        border: isActive ? Border.all(color: const Color(0xFF007AFF).withOpacity(0.3)) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,8 +193,8 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
             children: [
               Container(
                 width: 36, height: 36,
-                decoration: BoxDecoration(color: const Color(0xFF4FC3F7).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.download, color: Color(0xFF4FC3F7), size: 20),
+                decoration: BoxDecoration(color: const Color(0xFF007AFF).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.download, color: Color(0xFF007AFF), size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -212,7 +212,7 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                         ),
                         const SizedBox(width: 8),
                         if (task.totalBytes > 0)
-                          Text('${_formatBytes(task.receivedBytes)} / ${_formatBytes(task.totalBytes)}', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11)),
+                          Text('${_formatBytes(task.receivedBytes)} / ${_formatBytes(task.totalBytes)}', style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 11)),
                       ],
                     ),
                   ],
@@ -220,14 +220,14 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
               ),
               if (isActive)
                 IconButton(
-                  icon: const Icon(Icons.cancel, color: Color(0xFFEF5350), size: 22),
+                  icon: const Icon(Icons.cancel, color: Color(0xFFFF3B30), size: 22),
                   onPressed: () => DownloadManager().cancelTask(task.id),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 )
               else
                 IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFF6B7280), size: 20),
+                  icon: const Icon(Icons.close, color: Color(0xFF8E8E93), size: 20),
                   onPressed: () => DownloadManager().removeTask(task.id),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -240,18 +240,18 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: task.progress / 100,
-                backgroundColor: const Color(0xFF12121A),
-                valueColor: const AlwaysStoppedAnimation(Color(0xFF4FC3F7)),
+                backgroundColor: const Color(0xFF1C1C1E),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFF007AFF)),
                 minHeight: 6,
               ),
             ),
             const SizedBox(height: 4),
-            Text('${task.progress.toStringAsFixed(1)}%', style: const TextStyle(color: Color(0xFF4FC3F7), fontSize: 11)),
+            Text('${task.progress.toStringAsFixed(1)}%', style: const TextStyle(color: Color(0xFF007AFF), fontSize: 11)),
           ],
           if (task.error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(task.error!, style: const TextStyle(color: Color(0xFFEF5350), fontSize: 12)),
+              child: Text(task.error!, style: const TextStyle(color: Color(0xFFFF3B30), fontSize: 12)),
             ),
         ],
       ),
@@ -267,9 +267,9 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E2E),
+        color: const Color(0xFF2C2C2E),
         borderRadius: BorderRadius.circular(12),
-        border: isActive ? Border.all(color: const Color(0xFFFFB74D).withOpacity(0.3)) : null,
+        border: isActive ? Border.all(color: const Color(0xFFFF9500).withOpacity(0.3)) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,8 +278,8 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
             children: [
               Container(
                 width: 36, height: 36,
-                decoration: BoxDecoration(color: const Color(0xFFFFB74D).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: Icon(_getTaskIcon(task['type'] ?? ''), color: const Color(0xFFFFB74D), size: 20),
+                decoration: BoxDecoration(color: const Color(0xFFFF9500).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(_getTaskIcon(task['type'] ?? ''), color: const Color(0xFFFF9500), size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -296,7 +296,7 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                           child: Text(_getStatusText(status), style: TextStyle(color: _getStatusColor(status), fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 8),
-                        Text('类型: ${task['type'] ?? '-'}', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11)),
+                        Text('类型: ${task['type'] ?? '-'}', style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 11)),
                       ],
                     ),
                   ],
@@ -309,20 +309,20 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                   if (isActive && (taskType == 'copy' || taskType == 'upload' || taskType == 'upload-url' || taskType == 'url-download' || taskType == 'bt-download' || taskType == 'download' || taskType == 'extract')) ...[
                     if (status == 'running' || status == 'downloading')
                       IconButton(
-                        icon: const Icon(Icons.pause, color: Color(0xFFFFB74D), size: 20),
+                        icon: const Icon(Icons.pause, color: Color(0xFFFF9500), size: 20),
                         onPressed: () { ApiService().queueAction(task['id'], 'pause'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
                     if (status == 'paused')
                       IconButton(
-                        icon: const Icon(Icons.play_arrow, color: Color(0xFF81C784), size: 20),
+                        icon: const Icon(Icons.play_arrow, color: Color(0xFF34C759), size: 20),
                         onPressed: () { ApiService().queueAction(task['id'], 'resume'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
                     IconButton(
-                      icon: const Icon(Icons.cancel, color: Color(0xFFEF5350), size: 20),
+                      icon: const Icon(Icons.cancel, color: Color(0xFFFF3B30), size: 20),
                       onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -331,7 +331,7 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                   // 服务类任务：终止
                   if (isActive && (taskType == 'http-server' || taskType == 'download-link'))
                     IconButton(
-                      icon: const Icon(Icons.stop_circle, color: Color(0xFFEF5350), size: 20),
+                      icon: const Icon(Icons.stop_circle, color: Color(0xFFFF3B30), size: 20),
                       onPressed: () { ApiService().queueAction(task['id'], 'cancel'); Future.delayed(const Duration(milliseconds: 500), _loadRemoteQueue); },
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -339,7 +339,7 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
                   // 已结束任务：清除
                   if (!isActive)
                     IconButton(
-                      icon: const Icon(Icons.close, color: Color(0xFF6B7280), size: 20),
+                      icon: const Icon(Icons.close, color: Color(0xFF8E8E93), size: 20),
                       onPressed: () { ApiService().queueAction(task['id'], 'remove'); Future.delayed(const Duration(milliseconds: 300), _loadRemoteQueue); },
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -354,18 +354,18 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: progress / 100,
-                backgroundColor: const Color(0xFF12121A),
-                valueColor: const AlwaysStoppedAnimation(Color(0xFFFFB74D)),
+                backgroundColor: const Color(0xFF1C1C1E),
+                valueColor: const AlwaysStoppedAnimation(Color(0xFFFF9500)),
                 minHeight: 6,
               ),
             ),
             const SizedBox(height: 4),
-            Text('${progress.toStringAsFixed(1)}%', style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 11)),
+            Text('${progress.toStringAsFixed(1)}%', style: const TextStyle(color: Color(0xFFFF9500), fontSize: 11)),
           ],
           if (task['error'] != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(task['error'], style: const TextStyle(color: Color(0xFFEF5350), fontSize: 12)),
+              child: Text(task['error'], style: const TextStyle(color: Color(0xFFFF3B30), fontSize: 12)),
             ),
         ],
       ),
@@ -377,11 +377,11 @@ class _QueuePageState extends State<QueuePage> with AutomaticKeepAliveClientMixi
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.queue_play_next, color: const Color(0xFF455A64), size: 72),
+          Icon(Icons.queue_play_next, color: const Color(0xFF636366), size: 72),
           const SizedBox(height: 20),
           const Text('队列为空', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('上传、下载、复制任务将显示在这里', style: TextStyle(color: Color(0xFF90A4AE), fontSize: 14)),
+          const Text('上传、下载、复制任务将显示在这里', style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14)),
         ],
       ),
     );

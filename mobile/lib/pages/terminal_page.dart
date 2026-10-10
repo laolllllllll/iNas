@@ -63,12 +63,12 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
 
   Color _getFileIconColor(String fileName) {
     final ext = fileName.contains('.') ? fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase() : '';
-    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) return const Color(0xFFEF5350);
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].contains(ext)) return const Color(0xFFFF3B30);
     if (['mp4', 'avi', 'mkv', 'mov'].contains(ext)) return const Color(0xFFAB47BC);
-    if (['mp3', 'wav', 'flac'].contains(ext)) return const Color(0xFF66BB6A);
+    if (['mp3', 'wav', 'flac'].contains(ext)) return const Color(0xFF34C759);
     if (['pdf', 'doc', 'docx'].contains(ext)) return const Color(0xFF42A5F5);
-    if (['zip', 'rar', '7z'].contains(ext)) return const Color(0xFFFFA726);
-    return const Color(0xFF4FC3F7);
+    if (['zip', 'rar', '7z'].contains(ext)) return const Color(0xFFFF9500);
+    return const Color(0xFF007AFF);
   }
 
   Future<void> _shareFile(File file) async {
@@ -80,7 +80,7 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('分享失败: $e'), backgroundColor: const Color(0xFFEF5350)),
+          SnackBar(content: Text('分享失败: $e'), backgroundColor: const Color(0xFFFF3B30)),
         );
       }
     }
@@ -107,14 +107,14 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2E),
+        backgroundColor: const Color(0xFF2C2C2E),
         title: Text('删除 ${file.uri.pathSegments.last}?', style: const TextStyle(color: Colors.white)),
         content: const Text('此文件将从本机永久删除', style: TextStyle(color: Colors.grey)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF5350)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF3B30)),
             child: const Text('删除'),
           ),
         ],
@@ -130,7 +130,7 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
     final fileName = file.uri.pathSegments.last;
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: const Color(0xFF2C2C2E),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Column(
@@ -151,27 +151,27 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(fileName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text('${_formatBytes(file.lengthSync())} · ${_formatDate(file.lastModifiedSync())}', style: const TextStyle(color: Color(0xFF90A4AE), fontSize: 12)),
+                        Text('${_formatBytes(file.lengthSync())} · ${_formatDate(file.lastModifiedSync())}', style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 12)),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(color: Color(0xFF2A2A3E)),
+            const Divider(color: Color(0xFF38383A)),
             ListTile(
-              leading: const Icon(Icons.open_in_new, color: Color(0xFF4FC3F7)),
+              leading: const Icon(Icons.open_in_new, color: Color(0xFF007AFF)),
               title: const Text('用其他应用打开', style: TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(ctx); _openFile(file); },
             ),
             ListTile(
-              leading: const Icon(Icons.ios_share, color: Color(0xFF81C784)),
+              leading: const Icon(Icons.ios_share, color: Color(0xFF34C759)),
               title: const Text('分享', style: TextStyle(color: Colors.white)),
               onTap: () { Navigator.pop(ctx); _shareFile(file); },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: Color(0xFFEF5350)),
-              title: const Text('删除', style: TextStyle(color: Color(0xFFEF5350))),
+              leading: const Icon(Icons.delete_outline, color: Color(0xFFFF3B30)),
+              title: const Text('删除', style: TextStyle(color: Color(0xFFFF3B30))),
               onTap: () { Navigator.pop(ctx); _deleteFile(file); },
             ),
             const SizedBox(height: 8),
@@ -190,7 +190,7 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
         title: Column(
           children: [
             const Text('此终端', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            Text('${_files.length} 个文件', style: const TextStyle(fontSize: 11, color: Color(0xFF90A4AE))),
+            Text('${_files.length} 个文件', style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E93))),
           ],
         ),
         actions: [
@@ -202,7 +202,7 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF007AFF)))
           : _files.isEmpty
               ? _buildEmpty()
               : RefreshIndicator(
@@ -216,7 +216,7 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E1E2E),
+                          color: const Color(0xFF2C2C2E),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: ListTile(
@@ -230,19 +230,19 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
                             child: Icon(_getFileIcon(fileName), color: _getFileIconColor(fileName), size: 22),
                           ),
                           title: Text(fileName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text('${_formatBytes(file.lengthSync())} · ${_formatDate(file.lastModifiedSync())}', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+                          subtitle: Text('${_formatBytes(file.lengthSync())} · ${_formatDate(file.lastModifiedSync())}', style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 12)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.ios_share, color: Color(0xFF81C784), size: 22),
+                                icon: const Icon(Icons.ios_share, color: Color(0xFF34C759), size: 22),
                                 onPressed: () => _shareFile(file),
                                 tooltip: '分享',
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
                               ),
                               const SizedBox(width: 4),
-                              const Icon(Icons.chevron_right, color: Color(0xFF455A64), size: 20),
+                              const Icon(Icons.chevron_right, color: Color(0xFF636366), size: 20),
                             ],
                           ),
                           onTap: () => _openFile(file),
@@ -263,17 +263,17 @@ class _TerminalPageState extends State<TerminalPage> with AutomaticKeepAliveClie
           Container(
             width: 80, height: 80,
             decoration: BoxDecoration(
-              color: const Color(0xFF4FC3F7).withOpacity(0.08),
+              color: const Color(0xFF007AFF).withOpacity(0.08),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.phone_iphone, color: Color(0xFF455A64), size: 40),
+            child: const Icon(Icons.phone_iphone, color: Color(0xFF636366), size: 40),
           ),
           const SizedBox(height: 20),
           const Text('本机暂无文件', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('从浏览页下载文件后将显示在这里', style: TextStyle(color: Color(0xFF90A4AE), fontSize: 14)),
+          const Text('从浏览页下载文件后将显示在这里', style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14)),
           const SizedBox(height: 12),
-          const Text('支持 iOS 系统分享：存到文件 / 分享到其他 App', style: TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+          const Text('支持 iOS 系统分享：存到文件 / 分享到其他 App', style: TextStyle(color: Color(0xFF8E8E93), fontSize: 12)),
         ],
       ),
     );

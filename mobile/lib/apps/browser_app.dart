@@ -67,20 +67,20 @@ class _BrowserAppState extends State<BrowserApp> {
     final uri = Uri.parse(url);
     final napUrl = uri.queryParameters['url'] ?? '';
     if (napUrl.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('正在安装 NAP 应用...'), backgroundColor: Color(0xFF4FC3F7)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('正在安装 NAP 应用...'), backgroundColor: Color(0xFF007AFF)));
     AppService().installFromUrl(napUrl).then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('应用安装成功'), backgroundColor: Color(0xFF66BB6A)));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('应用安装成功'), backgroundColor: Color(0xFF34C759)));
     }).catchError((e) {
       String msg = e.toString();
       try { if (e.response?.data is Map && e.response.data['error'] != null) msg = e.response.data['error'].toString(); } catch(_) {}
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $msg'), backgroundColor: Color(0xFFEF5350)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $msg'), backgroundColor: Color(0xFFFF3B30)));
     });
   }
 
   void _handleDownload(String url) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已加入下载队列: ${Uri.parse(url).path.split('/').last}'), backgroundColor: const Color(0xFF4FC3F7)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已加入下载队列: ${Uri.parse(url).path.split('/').last}'), backgroundColor: const Color(0xFF007AFF)));
     ApiService().uploadFromUrl(url, '下载').catchError((e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('下载失败: $e'), backgroundColor: const Color(0xFFEF5350)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('下载失败: $e'), backgroundColor: const Color(0xFFFF3B30)));
     });
   }
 
@@ -89,15 +89,15 @@ class _BrowserAppState extends State<BrowserApp> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF1C1C1E),
         title: TextField(
           controller: _urlController,
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: const InputDecoration(
-            filled: true, fillColor: Color(0xFF12121A),
+            filled: true, fillColor: Color(0xFF1C1C1E),
             isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF2A2A3E))),
-            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF4FC3F7))),
+            enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF38383A))),
+            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF007AFF))),
           ),
           onSubmitted: (url) {
             if (!url.startsWith('http')) url = 'https://$url';
@@ -111,7 +111,7 @@ class _BrowserAppState extends State<BrowserApp> {
         ],
       ),
       body: Column(children: [
-        if (_loading) LinearProgressIndicator(value: _progress, backgroundColor: Color(0xFF2A2A3E), valueColor: AlwaysStoppedAnimation(Color(0xFF4FC3F7)), minHeight: 2),
+        if (_loading) LinearProgressIndicator(value: _progress, backgroundColor: Color(0xFF38383A), valueColor: AlwaysStoppedAnimation(Color(0xFF007AFF)), minHeight: 2),
         Expanded(child: WebViewWidget(controller: _controller)),
       ]),
     );

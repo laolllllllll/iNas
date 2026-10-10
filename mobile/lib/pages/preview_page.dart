@@ -79,7 +79,7 @@ class _PreviewPageState extends State<PreviewPage> {
   void _initWebView(File file) {
     _webController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF12121A))
+      ..setBackgroundColor(const Color(0xFF1C1C1E))
       ..loadFile(file.path);
     if (mounted) setState(() {});
   }
@@ -108,7 +108,7 @@ class _PreviewPageState extends State<PreviewPage> {
       return const Center(child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: Color(0xFF4FC3F7)),
+          CircularProgressIndicator(color: Color(0xFF007AFF)),
           SizedBox(height: 16),
           Text('加载中...', style: TextStyle(color: Colors.grey)),
         ],
@@ -119,7 +119,7 @@ class _PreviewPageState extends State<PreviewPage> {
       return Center(child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFFEF5350), size: 48),
+          const Icon(Icons.error_outline, color: Color(0xFFFF3B30), size: 48),
           const SizedBox(height: 12),
           const Text('预览失败', style: TextStyle(color: Colors.white)),
           const SizedBox(height: 8),
@@ -139,7 +139,7 @@ class _PreviewPageState extends State<PreviewPage> {
     }
 
     if (widget.fileItem.isVideo && _chewieController == null) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF007AFF)));
     }
 
     if (widget.fileItem.isHtml && _webController != null) {

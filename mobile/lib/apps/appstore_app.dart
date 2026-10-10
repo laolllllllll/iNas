@@ -25,11 +25,11 @@ class _AppStoreAppState extends State<AppStoreApp> {
             final uri = Uri.parse(request.url);
             final napUrl = uri.queryParameters['url'] ?? '';
             if (napUrl.isNotEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在安装应用...'), backgroundColor: Color(0xFF4FC3F7)));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在安装应用...'), backgroundColor: Color(0xFF007AFF)));
               AppService().installFromUrl(napUrl).then((_) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('安装成功'), backgroundColor: Color(0xFF66BB6A)));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('安装成功'), backgroundColor: Color(0xFF34C759)));
               }).catchError((e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $e'), backgroundColor: Color(0xFFEF5350)));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $e'), backgroundColor: Color(0xFFFF3B30)));
               });
             }
             return NavigationDecision.prevent;

@@ -164,7 +164,7 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: const Color(0xFF2C2C2E),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Column(
@@ -174,11 +174,11 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
               padding: EdgeInsets.all(16),
               child: Text('快捷命令', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             ),
-            const Divider(color: Color(0xFF2A2A3E)),
+            const Divider(color: Color(0xFF38383A)),
             ...commands.map((c) => ListTile(
-              leading: const Icon(Icons.bolt, color: Color(0xFFFFB74D), size: 20),
+              leading: const Icon(Icons.bolt, color: Color(0xFFFF9500), size: 20),
               title: Text(c['label']!, style: const TextStyle(color: Colors.white, fontSize: 14)),
-              subtitle: Text(c['cmd']!, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontFamily: 'monospace'), maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(c['cmd']!, style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 11, fontFamily: 'monospace'), maxLines: 1, overflow: TextOverflow.ellipsis),
               onTap: () {
                 Navigator.pop(ctx);
                 _inputController.text = c['cmd']!;
@@ -203,19 +203,19 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.terminal, color: Color(0xFF455A64), size: 72),
+              const Icon(Icons.terminal, color: Color(0xFF636366), size: 72),
               const SizedBox(height: 20),
               const Text('未连接 iNas 服务端', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('连接后可远程执行 Windows CMD 命令', style: TextStyle(color: Color(0xFF90A4AE), fontSize: 14)),
+              const Text('连接后可远程执行 Windows CMD 命令', style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14)),
               const SizedBox(height: 30),
               ElevatedButton.icon(
                 onPressed: () => showDialog(context: context, builder: (_) => const ConnectionDialog()),
                 icon: const Icon(Icons.link),
                 label: const Text('连接设备'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4FC3F7),
-                  foregroundColor: const Color(0xFF1A1A2E),
+                  backgroundColor: const Color(0xFF007AFF),
+                  foregroundColor: const Color(0xFF1C1C1E),
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
@@ -257,23 +257,23 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
             // 连接状态条
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: const Color(0xFF1A1A2E),
+              color: const Color(0xFF1C1C1E),
               child: Row(
                 children: [
                   Container(
                     width: 8, height: 8,
-                    decoration: const BoxDecoration(color: Color(0xFF81C784), shape: BoxShape.circle),
+                    decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '已连接: ${ApiService().baseUrl}',
-                      style: const TextStyle(color: Color(0xFF81C784), fontSize: 12, fontFamily: 'monospace'),
+                      style: const TextStyle(color: Color(0xFF34C759), fontSize: 12, fontFamily: 'monospace'),
                     ),
                   ),
                   if (_executing) const SizedBox(
                     width: 14, height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7)),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF007AFF)),
                   ),
                 ],
               ),
@@ -305,14 +305,14 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: const BoxDecoration(
-                color: Color(0xFF1A1A2E),
-                border: Border(top: BorderSide(color: Color(0xFF2A2A3E))),
+                color: Color(0xFF1C1C1E),
+                border: Border(top: BorderSide(color: Color(0xFF38383A))),
               ),
               child: SafeArea(
                 top: false,
                 child: Row(
                   children: [
-                    const Text('>', style: TextStyle(color: Color(0xFF81C784), fontSize: 16, fontFamily: 'monospace')),
+                    const Text('>', style: TextStyle(color: Color(0xFF34C759), fontSize: 16, fontFamily: 'monospace')),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
@@ -321,16 +321,16 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
                         style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'monospace'),
                         decoration: InputDecoration(
                           hintText: _executing ? '命令执行中...' : '输入 CMD 命令...',
-                          hintStyle: const TextStyle(color: Color(0xFF455A64), fontSize: 13),
+                          hintStyle: const TextStyle(color: Color(0xFF636366), fontSize: 13),
                           filled: true,
-                          fillColor: const Color(0xFF12121A),
+                          fillColor: const Color(0xFF1C1C1E),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF2A2A3E)),
+                            borderSide: const BorderSide(color: Color(0xFF38383A)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: Color(0xFF4FC3F7)),
+                            borderSide: const BorderSide(color: Color(0xFF007AFF)),
                           ),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         ),
@@ -343,9 +343,9 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
                     IconButton(
                       onPressed: _executing ? null : _executeCommand,
                       icon: const Icon(Icons.send),
-                      color: const Color(0xFF4FC3F7),
+                      color: const Color(0xFF007AFF),
                       style: IconButton.styleFrom(
-                        backgroundColor: const Color(0xFF4FC3F7).withOpacity(0.1),
+                        backgroundColor: const Color(0xFF007AFF).withOpacity(0.1),
                       ),
                     ),
                   ],
@@ -360,10 +360,10 @@ class _CmdPageState extends State<CmdPage> with AutomaticKeepAliveClientMixin {
 
   Color _getLineColor(CmdLineType type) {
     switch (type) {
-      case CmdLineType.command: return const Color(0xFF4FC3F7);
+      case CmdLineType.command: return const Color(0xFF007AFF);
       case CmdLineType.output: return const Color(0xFFE0E0E0);
-      case CmdLineType.error: return const Color(0xFFEF5350);
-      case CmdLineType.system: return const Color(0xFF81C784);
+      case CmdLineType.error: return const Color(0xFFFF3B30);
+      case CmdLineType.system: return const Color(0xFF34C759);
       case CmdLineType.empty: return Colors.transparent;
     }
   }

@@ -38,9 +38,9 @@ class _FilesAppState extends State<FilesApp> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF12121A),
+      backgroundColor: const Color(0xFF1C1C1E),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF1C1C1E),
         title: Text(_tab == 0 ? '下载' : '音乐'),
         automaticallyImplyLeading: false,
         actions: [
@@ -50,7 +50,7 @@ class _FilesAppState extends State<FilesApp> {
         ],
       ),
       body: Column(children: [
-        Container(color: const Color(0xFF1A1A2E), child: Row(children: [
+        Container(color: const Color(0xFF1C1C1E), child: Row(children: [
           _buildTab('下载', Icons.download, 0),
           _buildTab('音乐', Icons.music_note, 1),
         ])),
@@ -63,37 +63,37 @@ class _FilesAppState extends State<FilesApp> {
     final selected = _tab == index;
     return Expanded(child: GestureDetector(onTap: () { setState(() => _tab = index); _loadFiles(); },
       child: Container(padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: selected ? const Color(0xFF4FC3F7) : Colors.transparent, width: 2))),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: selected ? const Color(0xFF007AFF) : Colors.transparent, width: 2))),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 16, color: selected ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280)),
+          Icon(icon, size: 16, color: selected ? const Color(0xFF007AFF) : const Color(0xFF8E8E93)),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: selected ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280), fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+          Text(label, style: TextStyle(color: selected ? const Color(0xFF007AFF) : const Color(0xFF8E8E93), fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
         ]))));
   }
 
   Widget _buildFileList() {
-    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)));
-    if (_files.isEmpty) return Center(child: Text(_tab == 0 ? '下载目录为空' : '音乐目录为空', style: const TextStyle(color: Color(0xFF6B7280))));
+    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF007AFF)));
+    if (_files.isEmpty) return Center(child: Text(_tab == 0 ? '下载目录为空' : '音乐目录为空', style: const TextStyle(color: Color(0xFF8E8E93))));
     return ListView.builder(itemCount: _files.length, itemBuilder: (ctx, i) {
       final file = _files[i];
       return ListTile(
-        leading: Icon(file.isDirectory ? Icons.folder : Icons.insert_drive_file, color: const Color(0xFF4FC3F7)),
+        leading: Icon(file.isDirectory ? Icons.folder : Icons.insert_drive_file, color: const Color(0xFF007AFF)),
         title: Text(file.name, style: const TextStyle(color: Colors.white, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(file.formattedSize, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+        subtitle: Text(file.formattedSize, style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 12)),
         onLongPress: () => _showFileMenu(file),
       );
     });
   }
 
   void _showFileMenu(FileItem file) {
-    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1E1E2E),
+    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF2C2C2E),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFEF5350)), title: const Text('删除', style: TextStyle(color: Color(0xFFEF5350))),
+        ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF3B30)), title: const Text('删除', style: TextStyle(color: Color(0xFFFF3B30))),
           onTap: () async { Navigator.pop(ctx); await ApiService().deleteFile(file.path); _loadFiles(); }),
-        ListTile(leading: const Icon(Icons.drive_file_rename_outline, color: Color(0xFF4FC3F7)), title: const Text('重命名', style: TextStyle(color: Colors.white)),
+        ListTile(leading: const Icon(Icons.drive_file_rename_outline, color: Color(0xFF007AFF)), title: const Text('重命名', style: TextStyle(color: Colors.white)),
           onTap: () => Navigator.pop(ctx)),
-        ListTile(leading: const Icon(Icons.link, color: Color(0xFF4FC3F7)), title: const Text('开启直链', style: TextStyle(color: Colors.white)),
+        ListTile(leading: const Icon(Icons.link, color: Color(0xFF007AFF)), title: const Text('开启直链', style: TextStyle(color: Colors.white)),
           onTap: () async { Navigator.pop(ctx); await ApiService().createDownloadLink(file.path); }),
       ])));
   }

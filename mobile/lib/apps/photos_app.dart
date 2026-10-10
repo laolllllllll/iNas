@@ -62,7 +62,7 @@ class _PhotosAppState extends State<PhotosApp> {
         } catch (_) {}
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已上传 $success/${result.files.length} 个文件'), backgroundColor: const Color(0xFF66BB6A)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已上传 $success/${result.files.length} 个文件'), backgroundColor: const Color(0xFF34C759)));
         await _loadPhotos();
       }
     } catch (e) {
@@ -81,17 +81,17 @@ class _PhotosAppState extends State<PhotosApp> {
         title: const Text('相册'),
         automaticallyImplyLeading: false,
         actions: [
-          if (_uploading) const Padding(padding: EdgeInsets.only(right: 16), child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7))))),
+          if (_uploading) const Padding(padding: EdgeInsets.only(right: 16), child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF007AFF))))),
           IconButton(icon: const Icon(Icons.add), onPressed: _pickAndUpload, tooltip: '添加照片/视频'),
         ],
       ),
       body: _loading
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)))
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFF007AFF)))
         : _photos.isEmpty && _recentlyDeleted.isEmpty
           ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.photo_library, color: Color(0xFF455A64), size: 64),
+              Icon(Icons.photo_library, color: Color(0xFF636366), size: 64),
               SizedBox(height: 12),
-              Text('暂无照片', style: TextStyle(color: Color(0xFF6B7280))),
+              Text('暂无照片', style: TextStyle(color: Color(0xFF8E8E93))),
             ]))
           : GridView.builder(
               padding: const EdgeInsets.all(2),
@@ -112,9 +112,9 @@ class _PhotosAppState extends State<PhotosApp> {
       child: Container(
         color: const Color(0xFF1A1A1A),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.delete_outline, color: Color(0xFF90A4AE), size: 32),
+          const Icon(Icons.delete_outline, color: Color(0xFF8E8E93), size: 32),
           const SizedBox(height: 4),
-          Text('最近删除 (${_recentlyDeleted.length})', style: const TextStyle(color: Color(0xFF90A4AE), fontSize: 10), textAlign: TextAlign.center),
+          Text('最近删除 (${_recentlyDeleted.length})', style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 10), textAlign: TextAlign.center),
         ]),
       ),
     );
@@ -126,8 +126,8 @@ class _PhotosAppState extends State<PhotosApp> {
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PhotoPreviewPage(photos: _photos, initialIndex: _photos.indexOf(photo), onChanged: () => _loadAll()))),
       child: Stack(children: [
         Positioned.fill(child: photo.isImage
-          ? Image.network(url, headers: {'x-nas-token': ApiService().token ?? ''}, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1E1E2E), child: const Icon(Icons.image, color: Color(0xFF455A64))))
-          : Container(color: const Color(0xFF1E1E2E), child: const Icon(Icons.play_circle_filled, color: Colors.white, size: 40))),
+          ? Image.network(url, headers: {'x-nas-token': ApiService().token ?? ''}, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFF2C2C2E), child: const Icon(Icons.image, color: Color(0xFF636366))))
+          : Container(color: const Color(0xFF2C2C2E), child: const Icon(Icons.play_circle_filled, color: Colors.white, size: 40))),
       ]),
     );
   }
@@ -177,12 +177,12 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
   Future<void> _deleteToRecentlyDeleted() async {
     final photo = widget.photos[_currentIndex];
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: const Color(0xFF2C2C2E),
       title: const Text('删除?', style: TextStyle(color: Colors.white)),
       content: Text('${photo.name} 将移到最近删除，30天后自动清除。', style: const TextStyle(color: Colors.grey)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-        ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF5350)), child: const Text('删除')),
+        ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF3B30)), child: const Text('删除')),
       ],
     ));
     if (confirm != true) return;
@@ -190,7 +190,7 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
       await ApiService().softDeletePhotos([photo.name]);
       widget.onChanged();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已移到最近删除'), backgroundColor: Color(0xFF66BB6A)));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已移到最近删除'), backgroundColor: Color(0xFF34C759)));
         Navigator.pop(context);
       }
     } catch (e) {
@@ -218,8 +218,8 @@ class _PhotoPreviewPageState extends State<PhotoPreviewPage> {
       bottomNavigationBar: BottomAppBar(
         color: Colors.black,
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          IconButton(icon: const Icon(Icons.save_alt, color: Color(0xFF4FC3F7)), onPressed: _saveToSystemAlbum, tooltip: '保存到系统相册'),
-          IconButton(icon: const Icon(Icons.delete_outline, color: Color(0xFFEF5350)), onPressed: _deleteToRecentlyDeleted, tooltip: '删除'),
+          IconButton(icon: const Icon(Icons.save_alt, color: Color(0xFF007AFF)), onPressed: _saveToSystemAlbum, tooltip: '保存到系统相册'),
+          IconButton(icon: const Icon(Icons.delete_outline, color: Color(0xFFFF3B30)), onPressed: _deleteToRecentlyDeleted, tooltip: '删除'),
         ]),
       ),
     );
@@ -266,7 +266,7 @@ class _RecentlyDeletedPageState extends State<RecentlyDeletedPage> {
       _selected.clear();
       _selectMode = false;
       _load();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已恢复'), backgroundColor: Color(0xFF66BB6A)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已恢复'), backgroundColor: Color(0xFF34C759)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('恢复失败: $e')));
     }
@@ -275,12 +275,12 @@ class _RecentlyDeletedPageState extends State<RecentlyDeletedPage> {
   Future<void> _purgeSelected() async {
     if (_selected.isEmpty) return;
     final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: const Color(0xFF2C2C2E),
       title: const Text('彻底删除?', style: TextStyle(color: Colors.white)),
       content: Text('将永久删除 ${_selected.length} 个文件，无法恢复。', style: const TextStyle(color: Colors.grey)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-        ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF5350)), child: const Text('删除')),
+        ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF3B30)), child: const Text('删除')),
       ],
     ));
     if (confirm != true) return;
@@ -289,7 +289,7 @@ class _RecentlyDeletedPageState extends State<RecentlyDeletedPage> {
       _selected.clear();
       _selectMode = false;
       _load();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已彻底删除'), backgroundColor: Color(0xFFEF5350)));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已彻底删除'), backgroundColor: Color(0xFFFF3B30)));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败: $e')));
     }
@@ -308,14 +308,14 @@ class _RecentlyDeletedPageState extends State<RecentlyDeletedPage> {
         ],
       ),
       body: _loading
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)))
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFF007AFF)))
         : _items.isEmpty
           ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.delete_sweep, color: Color(0xFF455A64), size: 64),
+              Icon(Icons.delete_sweep, color: Color(0xFF636366), size: 64),
               SizedBox(height: 12),
-              Text('最近删除为空', style: TextStyle(color: Color(0xFF6B7280))),
+              Text('最近删除为空', style: TextStyle(color: Color(0xFF8E8E93))),
               SizedBox(height: 4),
-              Text('删除的照片将在这里保留30天', style: TextStyle(color: Color(0xFF455A64), fontSize: 12)),
+              Text('删除的照片将在这里保留30天', style: TextStyle(color: Color(0xFF636366), fontSize: 12)),
             ]))
           : GridView.builder(
               padding: const EdgeInsets.all(2),
@@ -337,8 +337,8 @@ class _RecentlyDeletedPageState extends State<RecentlyDeletedPage> {
                   },
                   child: Stack(children: [
                     Positioned.fill(child: isImage
-                      ? Image.network(url, headers: {'x-nas-token': ApiService().token ?? ''}, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1E1E2E), child: const Icon(Icons.image, color: Color(0xFF455A64))))
-                      : Container(color: const Color(0xFF1E1E2E), child: const Icon(Icons.play_circle_filled, color: Colors.white, size: 32))),
+                      ? Image.network(url, headers: {'x-nas-token': ApiService().token ?? ''}, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFF2C2C2E), child: const Icon(Icons.image, color: Color(0xFF636366))))
+                      : Container(color: const Color(0xFF2C2C2E), child: const Icon(Icons.play_circle_filled, color: Colors.white, size: 32))),
                     if (isSel) Positioned.fill(child: Container(color: Colors.blue.withOpacity(0.4), child: const Icon(Icons.check_circle, color: Colors.white, size: 28))),
                     Positioned(top: 4, right: 4, child: Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)), child: Text(_daysAgo(deletedAt), style: const TextStyle(color: Colors.white, fontSize: 9)))),
                   ]),
@@ -348,8 +348,8 @@ class _RecentlyDeletedPageState extends State<RecentlyDeletedPage> {
       bottomNavigationBar: _selectMode ? BottomAppBar(
         color: const Color(0xFF1A1A1A),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          TextButton.icon(onPressed: _recoverSelected, icon: const Icon(Icons.restore, color: Color(0xFF66BB6A)), label: const Text('恢复', style: TextStyle(color: Color(0xFF66BB6A)))),
-          TextButton.icon(onPressed: _purgeSelected, icon: const Icon(Icons.delete_forever, color: Color(0xFFEF5350)), label: const Text('彻底删除', style: TextStyle(color: Color(0xFFEF5350)))),
+          TextButton.icon(onPressed: _recoverSelected, icon: const Icon(Icons.restore, color: Color(0xFF34C759)), label: const Text('恢复', style: TextStyle(color: Color(0xFF34C759)))),
+          TextButton.icon(onPressed: _purgeSelected, icon: const Icon(Icons.delete_forever, color: Color(0xFFFF3B30)), label: const Text('彻底删除', style: TextStyle(color: Color(0xFFFF3B30)))),
         ]),
       ) : null,
     );

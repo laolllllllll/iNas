@@ -7,6 +7,7 @@ import 'pages/cmd_page.dart';
 import 'pages/queue_page.dart';
 import 'pages/terminal_page.dart';
 import 'pages/apps_page.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,33 +27,7 @@ class INasApp extends StatelessWidget {
     return MaterialApp(
       title: 'iNas v2',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: const Color(0xFF4FC3F7),
-        scaffoldBackgroundColor: const Color(0xFF12121A),
-        cardColor: const Color(0xFF1E1E2E),
-        dividerColor: const Color(0xFF2A2A3E),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1A1A2E),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF1A1A2E),
-          selectedItemColor: Color(0xFF4FC3F7),
-          unselectedItemColor: Color(0xFF6B7280),
-          type: BottomNavigationBarType.fixed,
-          showUnselectedLabels: true,
-          elevation: 8,
-        ),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF4FC3F7),
-          secondary: Color(0xFF81C784),
-          surface: Color(0xFF1E1E2E),
-          error: Color(0xFFEF5350),
-        ),
-      ),
+      theme: AppTheme.darkTheme,
       home: const MainPage(),
     );
   }

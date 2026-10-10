@@ -58,14 +58,14 @@ class _TextEditorPageState extends State<TextEditorPage> {
           _saving = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已保存'), backgroundColor: Color(0xFF81C784), duration: Duration(seconds: 1)),
+          const SnackBar(content: Text('已保存'), backgroundColor: Color(0xFF34C759), duration: Duration(seconds: 1)),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() { _saving = false; });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $e'), backgroundColor: const Color(0xFFEF5350)),
+          SnackBar(content: Text('保存失败: $e'), backgroundColor: const Color(0xFFFF3B30)),
         );
       }
     }
@@ -76,7 +76,7 @@ class _TextEditorPageState extends State<TextEditorPage> {
       final result = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E2E),
+          backgroundColor: const Color(0xFF2C2C2E),
           title: const Text('未保存的更改', style: TextStyle(color: Colors.white)),
           content: const Text('文件已修改但未保存，是否保存？', style: TextStyle(color: Colors.grey)),
           actions: [
@@ -97,18 +97,18 @@ class _TextEditorPageState extends State<TextEditorPage> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: const Color(0xFF12121A),
+        backgroundColor: const Color(0xFF1C1C1E),
         appBar: AppBar(
           title: Text(widget.fileName, style: const TextStyle(fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
           actions: [
             if (_dirty)
               const Padding(
                 padding: EdgeInsets.only(right: 8),
-                child: Center(child: Text('●', style: TextStyle(color: Color(0xFFFFB74D), fontSize: 10))),
+                child: Center(child: Text('●', style: TextStyle(color: Color(0xFFFF9500), fontSize: 10))),
               ),
             IconButton(
               icon: _saving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4FC3F7)))
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF007AFF)))
                   : const Icon(Icons.save),
               onPressed: _saving ? null : _saveFile,
               tooltip: '保存',
@@ -116,12 +116,12 @@ class _TextEditorPageState extends State<TextEditorPage> {
           ],
         ),
         body: _loading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7)))
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF007AFF)))
             : _error != null
                 ? Center(child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline, color: Color(0xFFEF5350), size: 48),
+                      const Icon(Icons.error_outline, color: Color(0xFFFF3B30), size: 48),
                       const SizedBox(height: 12),
                       const Text('加载失败', style: TextStyle(color: Colors.white)),
                       const SizedBox(height: 8),

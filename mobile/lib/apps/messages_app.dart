@@ -61,11 +61,11 @@ class _MessagesAppState extends State<MessagesApp> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF12121A),
-      appBar: AppBar(backgroundColor: const Color(0xFF1A1A2E), title: const Text('信息'), automaticallyImplyLeading: false),
+      backgroundColor: const Color(0xFF1C1C1E),
+      appBar: AppBar(backgroundColor: const Color(0xFF1C1C1E), title: const Text('信息'), automaticallyImplyLeading: false),
       body: Column(children: [
         Expanded(child: _messages.isEmpty
-          ? const Center(child: Text('暂无消息', style: TextStyle(color: Color(0xFF6B7280))))
+          ? const Center(child: Text('暂无消息', style: TextStyle(color: Color(0xFF8E8E93))))
           : ListView.builder(controller: _scrollController, padding: const EdgeInsets.all(12), itemCount: _messages.length, itemBuilder: (ctx, i) {
               final msg = _messages[i];
               final isMe = msg['deviceName'] == _deviceName;
@@ -74,31 +74,31 @@ class _MessagesAppState extends State<MessagesApp> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!isMe) ...[
-                    CircleAvatar(radius: 16, backgroundColor: const Color(0xFF66BB6A), child: Text(msg['deviceName']?.toString().substring(0, 1).toUpperCase() ?? '?', style: const TextStyle(color: Colors.white, fontSize: 12))),
+                    CircleAvatar(radius: 16, backgroundColor: const Color(0xFF34C759), child: Text(msg['deviceName']?.toString().substring(0, 1).toUpperCase() ?? '?', style: const TextStyle(color: Colors.white, fontSize: 12))),
                     const SizedBox(width: 8),
                   ],
                   Flexible(child: Column(crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
-                    if (!isMe) Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(msg['deviceName']?.toString() ?? '', style: const TextStyle(color: Color(0xFF90A4AE), fontSize: 11))),
+                    if (!isMe) Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(msg['deviceName']?.toString() ?? '', style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 11))),
                     Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(color: isMe ? const Color(0xFF4FC3F7) : const Color(0xFF1E1E2E), borderRadius: BorderRadius.circular(16)),
-                      child: Text(msg['content']?.toString() ?? '', style: TextStyle(color: isMe ? const Color(0xFF1A1A2E) : Colors.white, fontSize: 14))),
+                      decoration: BoxDecoration(color: isMe ? const Color(0xFF007AFF) : const Color(0xFF2C2C2E), borderRadius: BorderRadius.circular(16)),
+                      child: Text(msg['content']?.toString() ?? '', style: TextStyle(color: isMe ? const Color(0xFF1C1C1E) : Colors.white, fontSize: 14))),
                   ])),
                   if (isMe) ...[
                     const SizedBox(width: 8),
-                    CircleAvatar(radius: 16, backgroundColor: const Color(0xFF4FC3F7), child: Text(_deviceName?.substring(0, 1).toUpperCase() ?? '?', style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 12))),
+                    CircleAvatar(radius: 16, backgroundColor: const Color(0xFF007AFF), child: Text(_deviceName?.substring(0, 1).toUpperCase() ?? '?', style: const TextStyle(color: Color(0xFF1C1C1E), fontSize: 12))),
                   ],
                 ],
               ));
             })),
         // 输入框
-        Container(padding: const EdgeInsets.all(12), color: const Color(0xFF1A1A2E), child: Row(children: [
+        Container(padding: const EdgeInsets.all(12), color: const Color(0xFF1C1C1E), child: Row(children: [
           Expanded(child: TextField(controller: _msgController, style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(filled: true, fillColor: Color(0xFF12121A), hintText: '输入消息...', hintStyle: TextStyle(color: Color(0xFF455A64)),
-              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF2A2A3E)), borderRadius: BorderRadius.all(Radius.circular(20))),
-              focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF4FC3F7)), borderRadius: BorderRadius.all(Radius.circular(20))), contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
+            decoration: const InputDecoration(filled: true, fillColor: Color(0xFF1C1C1E), hintText: '输入消息...', hintStyle: TextStyle(color: Color(0xFF636366)),
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF38383A)), borderRadius: BorderRadius.all(Radius.circular(20))),
+              focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF007AFF)), borderRadius: BorderRadius.all(Radius.circular(20))), contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
             onSubmitted: (_) => _sendMessage())),
           const SizedBox(width: 8),
-          IconButton(icon: const Icon(Icons.send, color: Color(0xFF4FC3F7)), onPressed: _sendMessage),
+          IconButton(icon: const Icon(Icons.send, color: Color(0xFF007AFF)), onPressed: _sendMessage),
         ])),
       ]),
     );

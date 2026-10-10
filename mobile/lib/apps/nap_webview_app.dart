@@ -44,15 +44,15 @@ class _NapWebViewAppState extends State<NapWebViewApp> {
     final napUrl = uri.queryParameters['url'] ?? '';
     if (napUrl.isEmpty) return;
     showDialog(context: context, builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1E1E2E),
+      backgroundColor: const Color(0xFF2C2C2E),
       title: const Text('安装应用', style: TextStyle(color: Colors.white)),
       content: Text('正在下载并安装 NAP 应用...\n$napUrl', style: const TextStyle(color: Colors.grey, fontSize: 12)),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('确定'))],
     ));
     AppService().installFromUrl(napUrl).then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('应用安装成功'), backgroundColor: Color(0xFF66BB6A)));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('应用安装成功'), backgroundColor: Color(0xFF34C759)));
     }).catchError((e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $e'), backgroundColor: const Color(0xFFEF5350)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('安装失败: $e'), backgroundColor: const Color(0xFFFF3B30)));
     });
   }
 
@@ -62,7 +62,7 @@ class _NapWebViewAppState extends State<NapWebViewApp> {
       backgroundColor: Colors.black,
       body: Stack(children: [
         WebViewWidget(controller: _controller),
-        if (_loading) const Center(child: CircularProgressIndicator(color: Color(0xFF4FC3F7))),
+        if (_loading) const Center(child: CircularProgressIndicator(color: Color(0xFF007AFF))),
       ]),
     );
   }
